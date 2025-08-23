@@ -14,13 +14,11 @@ export const isSupabaseConfigured = (() => {
   )
 })()
 
+// Remove all session/user checks and redirects
 export async function updateSession(request: NextRequest) {
-  // If Supabase is not configured, just continue without auth
-  if (!isSupabaseConfigured) {
-    return NextResponse.next({
-      request,
-    })
-  }
+  // No-op: authentication entirely disabled
+  return NextResponse.next();
+}
 
   const res = NextResponse.next()
 
