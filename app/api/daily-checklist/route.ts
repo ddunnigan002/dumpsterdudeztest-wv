@@ -28,22 +28,43 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Map checklist items to database columns
+    // Helper function to safely get checklist item status
+    const getItemStatus = (itemId: string) => {
+      const item = checklist.find((item: any) => item.id === itemId)
+      return item?.status === "pass"
+    }
+
+    // Build checklist data object dynamically
     const checklistData = {
       vehicle_id: vehicle.id,
-      driver_id: user.id, // Use authenticated user ID
+      driver_id: user.id,
       checklist_date: new Date().toISOString().split("T")[0],
-      tires_condition: checklist.find((item: any) => item.id === "tires")?.status === "pass",
-      lights_working: checklist.find((item: any) => item.id === "lights")?.status === "pass",
-      brakes_working: checklist.find((item: any) => item.id === "brakes")?.status === "pass",
-      fluid_levels_ok: checklist.find((item: any) => item.id === "fluids")?.status === "pass",
       overall_status: checklist.some((item: any) => item.status === "fail")
         ? "fail"
         : checklist.some((item: any) => item.status === "service_soon")
           ? "pending"
           : "pass",
       notes: notes || null,
+      checklist_items: JSON.stringify(checklist), // Store the full checklist data
+      photos: JSON.stringify(photoUrls || [])
     }
+
+    // Only add database columns that exist and have corresponding frontend items
+    const itemMapping = {
+      tires: 'tires_condition',
+      lights: 'lights_working', 
+      brakes: 'brakes_working',
+      fluids: 'fluid_levels_ok'
+    }
+
+    // Map only the items that exist in your frontend
+    Object.entries(itemMapping).forEach(([frontendId, dbColumn]) => {
+      checklistData[dbColumn] = getItemStatus(frontendId)
+    })
+
+    // Set default values for removed items (if columns still exist in DB)
+    checklistData.mirrors_clean = true
+    checklistData.safety_equipment_present = true
 
     const { data, error } = await supabase
       .from("daily_checklists")
