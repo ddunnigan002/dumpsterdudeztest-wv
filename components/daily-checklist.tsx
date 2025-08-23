@@ -26,8 +26,6 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
     { id: "lights", label: "Lights", description: "Test all lights (headlights, taillights, signals)", status: null },
     { id: "brakes", label: "Brakes", description: "Test brake function and check fluid", status: null },
     { id: "fluids", label: "Fluid Levels", description: "Check oil, coolant, and other fluids", status: null },
-    { id: "mirrors", label: "Mirrors", description: "Clean and adjust all mirrors", status: null },
-    { id: "safety", label: "Safety Equipment", description: "Verify safety equipment is present", status: null },
   ])
 
   const [notes, setNotes] = useState("")
