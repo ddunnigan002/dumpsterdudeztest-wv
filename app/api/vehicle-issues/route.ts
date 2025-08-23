@@ -3,15 +3,16 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { vehicleId, description, photos, date, severity, manager_override } = await request.json()
-
     const supabase = createClient()
+    const body = await request.json()
 
-    // First, get the vehicle UUID from the vehicle_number
+    const { vehicle_number, description, severity, status, notes, reported_date, manager_override } = body
+
+    // Get vehicle ID from vehicle number
     const { data: vehicle, error: vehicleError } = await supabase
       .from("vehicles")
       .select("id")
-      .eq("vehicle_number", vehicleId)
+      .eq("vehicle_number", vehicle_number)
       .single()
 
     if (vehicleError || !vehicle) {
@@ -24,22 +25,23 @@ export async function POST(request: NextRequest) {
         vehicle_id: vehicle.id,
         description,
         severity: severity || "medium",
-        photos: photos || [],
-        status: "open",
-        reported_date: new Date(date).toISOString().split("T")[0],
+        status: status || "open",
+        notes,
+        reported_date: reported_date || new Date().toISOString().split("T")[0],
         manager_override: manager_override || false,
         created_at: new Date().toISOString(),
       })
       .select()
+      .single()
 
     if (error) {
-      console.error("Error saving issue report:", error)
-      return NextResponse.json({ error: "Failed to save issue report" }, { status: 500 })
+      console.error("Database error:", error)
+      return NextResponse.json({ error: "Failed to save vehicle issue" }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, data })
   } catch (error) {
-    console.error("Error in report issue API:", error)
+    console.error("API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

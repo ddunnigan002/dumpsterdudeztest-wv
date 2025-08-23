@@ -3,17 +3,19 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { vehicleId, gallons, totalCost, date } = await request.json()
+    const { vehicleId, gallons, totalCost, date, manager_override } = await request.json()
 
     const supabase = createClient()
 
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
+    if (!manager_override) {
+      const {
+        data: { user },
+        error: authError,
+      } = await supabase.auth.getUser()
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      if (authError || !user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      }
     }
 
     // First, get the vehicle UUID from the vehicle_number
@@ -31,12 +33,11 @@ export async function POST(request: NextRequest) {
       .from("daily_logs")
       .insert({
         vehicle_id: vehicle.id,
-        driver_id: user.id,
-        fuel_added: gallons,
+        driver_id: manager_override ? "00000000-0000-0000-0000-000000000001" : null,
+        gallons_purchased: gallons,
         fuel_cost: totalCost,
         log_date: new Date(date).toISOString().split("T")[0],
-        start_mileage: 0,
-        end_mileage: 0,
+        manager_override: manager_override || false,
         created_at: new Date().toISOString(),
       })
       .select()

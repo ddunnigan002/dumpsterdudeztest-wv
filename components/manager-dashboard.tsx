@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Truck, AlertTriangle, Settings, BarChart3, FileText } from "lucide-react"
+import { ArrowLeft, Truck, AlertTriangle, Settings, BarChart3, FileText, Edit3, History } from "lucide-react"
 
 const ManagerDashboard = () => {
   const router = useRouter()
@@ -402,7 +402,7 @@ const ManagerDashboard = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <Button
                 variant="outline"
                 className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
@@ -426,6 +426,22 @@ const ManagerDashboard = () => {
               >
                 <BarChart3 className="h-6 w-6 text-orange-600" />
                 <span className="text-sm">Gas Analytics</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                onClick={() => router.push("/manager/data-override")}
+              >
+                <Edit3 className="h-6 w-6 text-orange-600" />
+                <span className="text-sm">Data Override</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                onClick={() => router.push("/manager/audit-log")}
+              >
+                <History className="h-6 w-6 text-orange-600" />
+                <span className="text-sm">Audit Log</span>
               </Button>
               <Button
                 variant="outline"

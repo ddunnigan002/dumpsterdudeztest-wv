@@ -4,39 +4,39 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(1 0 0); /* White background */
-  --foreground: oklch(0.35 0 0); /* Dark gray text */
-  --card: oklch(0.98 0 0); /* Light gray card background */
-  --card-foreground: oklch(0.35 0 0); /* Dark gray text on cards */
-  --popover: oklch(1 0 0); /* White popover background */
-  --popover-foreground: oklch(0.35 0 0); /* Dark gray text in popovers */
-  --primary: oklch(0.45 0.15 45); /* Orange primary color #a16207 */
-  --primary-foreground: oklch(1 0 0); /* White text on primary */
-  --secondary: oklch(0.65 0.2 35); /* Brighter orange accent #f97316 */
-  --secondary-foreground: oklch(1 0 0); /* White text on secondary */
-  --muted: oklch(0.96 0 0); /* Very light gray muted background */
-  --muted-foreground: oklch(0.5 0 0); /* Medium gray muted text */
-  --accent: oklch(0.65 0.2 35); /* Orange accent color #f97316 */
-  --accent-foreground: oklch(1 0 0); /* White text on accent */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.577 0.245 27.325);
-  --border: oklch(0.9 0 0); /* Light gray borders */
-  --input: oklch(1 0 0); /* White input backgrounds */
-  --ring: oklch(0.65 0.2 35 / 0.5); /* Orange focus ring with transparency */
-  --chart-1: oklch(0.65 0.2 35); /* Orange chart color */
-  --chart-2: oklch(0.96 0 0); /* Light gray chart color */
-  --chart-3: oklch(0.45 0.15 45); /* Primary orange chart color */
-  --chart-4: oklch(0.35 0 0); /* Dark gray chart color */
-  --chart-5: oklch(0.9 0 0); /* Border gray chart color */
-  --radius: 0.5rem; /* Slightly smaller radius for cleaner look */
-  --sidebar: oklch(1 0 0); /* White sidebar */
-  --sidebar-foreground: oklch(0.35 0 0); /* Dark gray sidebar text */
-  --sidebar-primary: oklch(0.96 0 0); /* Light gray sidebar primary */
-  --sidebar-primary-foreground: oklch(0.35 0 0); /* Dark gray sidebar primary text */
-  --sidebar-accent: oklch(0.65 0.2 35); /* Orange sidebar accent */
-  --sidebar-accent-foreground: oklch(1 0 0); /* White sidebar accent text */
-  --sidebar-border: oklch(0.9 0 0); /* Light gray sidebar border */
-  --sidebar-ring: oklch(0.65 0.2 35 / 0.5); /* Orange sidebar focus ring */
+  --background: #ffffff; /* White background */
+  --foreground: #1f2937; /* Dark gray text */
+  --card: #f8fafc; /* Light gray card background */
+  --card-foreground: #1f2937; /* Dark gray text on cards */
+  --popover: #ffffff; /* White popover background */
+  --popover-foreground: #1f2937; /* Dark gray text in popovers */
+  --primary: #ff6f20; /* Orange primary color */
+  --primary-foreground: #ffffff; /* White text on primary */
+  --secondary: #ff9f45; /* Lighter orange accent */
+  --secondary-foreground: #1f2937; /* Dark gray text on secondary */
+  --muted: #f8fafc; /* Very light gray muted background */
+  --muted-foreground: #1f2937; /* Dark gray muted text */
+  --accent: #ff9f45; /* Orange accent color */
+  --accent-foreground: #1f2937; /* Dark gray text on accent */
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+  --border: #e5e7eb; /* Light gray borders */
+  --input: #ffffff; /* White input backgrounds */
+  --ring: #ff6f20; /* Orange focus ring */
+  --chart-1: #ff6f20; /* Orange chart color */
+  --chart-2: #ff9f45; /* Light orange chart color */
+  --chart-3: #1f2937; /* Dark gray chart color */
+  --chart-4: #f8fafc; /* Light gray chart color */
+  --chart-5: #e5e7eb; /* Border gray chart color */
+  --radius: 0.5rem; /* Rounded corners */
+  --sidebar: #f8fafc; /* Light gray sidebar */
+  --sidebar-foreground: #1f2937; /* Dark gray sidebar text */
+  --sidebar-primary: #ff6f20; /* Orange sidebar primary */
+  --sidebar-primary-foreground: #ffffff; /* White sidebar primary text */
+  --sidebar-accent: #ff9f45; /* Orange sidebar accent */
+  --sidebar-accent-foreground: #1f2937; /* Dark gray sidebar accent text */
+  --sidebar-border: #e5e7eb; /* Light gray sidebar border */
+  --sidebar-ring: #ff6f20; /* Orange sidebar focus ring */
 }
 
 .dark {
@@ -75,7 +75,6 @@
 }
 
 @theme inline {
-  /* optional: --font-sans, --font-serif, --font-mono if they are applied in the layout.tsx */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -129,20 +128,20 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: oklch(0.98 0 0); /* Light card background */
+  background: var(--card);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.65 0.2 35); /* Orange accent color */
+  background: var(--primary);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0.15 45); /* Primary orange on hover */
+  background: var(--accent);
 }
 
 /* Focus styles with orange theme */
 .focus-visible:focus-visible {
-  outline: 2px solid oklch(0.45 0.15 45); /* Primary orange outline */
+  outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
