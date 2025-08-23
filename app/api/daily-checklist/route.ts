@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     console.log("🔵 API: Using default system user (no login required)")
     
     // Use a default user ID - you can change this to any UUID you want
-    const defaultUserId = "00000000-0000-0000-0000-000000000000"
+    const defaultUserId = "8cd2bf7a-2442-4468-8131-d3d2764db3b1"
 
     // Helper function to safely get checklist item status
     const getItemStatus = (itemId: string) => {
