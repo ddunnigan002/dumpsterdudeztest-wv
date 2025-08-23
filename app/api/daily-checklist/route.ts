@@ -37,8 +37,6 @@ export async function POST(request: NextRequest) {
       lights_working: checklist.find((item: any) => item.id === "lights")?.status === "pass",
       brakes_working: checklist.find((item: any) => item.id === "brakes")?.status === "pass",
       fluid_levels_ok: checklist.find((item: any) => item.id === "fluids")?.status === "pass",
-      mirrors_clean: checklist.find((item: any) => item.id === "mirrors")?.status === "pass",
-      safety_equipment_present: checklist.find((item: any) => item.id === "safety")?.status === "pass",
       overall_status: checklist.some((item: any) => item.status === "fail")
         ? "fail"
         : checklist.some((item: any) => item.status === "service_soon")
