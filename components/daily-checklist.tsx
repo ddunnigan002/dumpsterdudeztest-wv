@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, CheckCircle, XCircle } from "lucide-react"
+import { ArrowLeft, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import PhotoUpload from "@/components/photo-upload"
 
@@ -31,6 +31,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
   const [notes, setNotes] = useState("")
   const [photoUrls, setPhotoUrls] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string>("")
 
   const updateChecklistItem = (id: string, status: "pass" | "service_soon" | "fail") => {
     setChecklist((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)))
@@ -42,34 +43,62 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
 
   const handleSubmit = async () => {
     setIsSubmitting(true)
+    setError("")
+
+    console.log("🚀 Starting checklist submission...")
+    console.log("Vehicle Number:", vehicleNumber)
+    console.log("Checklist:", checklist)
+    console.log("Notes:", notes)
+    console.log("Photo URLs:", photoUrls)
 
     try {
+      const payload = {
+        vehicleNumber,
+        checklist,
+        notes,
+        photoUrls,
+      }
+
+      console.log("📤 Sending payload:", JSON.stringify(payload, null, 2))
+
       const response = await fetch("/api/daily-checklist", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          vehicleNumber,
-          checklist,
-          notes,
-          photoUrls,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to save checklist")
+      console.log("📡 Response status:", response.status)
+      console.log("📡 Response ok:", response.ok)
+
+      const responseText = await response.text()
+      console.log("📡 Raw response:", responseText)
+
+      let result
+      try {
+        result = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ Failed to parse response as JSON:", parseError)
+        throw new Error(`Invalid JSON response: ${responseText}`)
       }
 
-      const result = await response.json()
-      console.log("Checklist saved successfully:", result)
+      if (!response.ok) {
+        console.error("❌ API Error:", result)
+        throw new Error(result.error || `HTTP ${response.status}: ${response.statusText}`)
+      }
 
-      setIsSubmitting(false)
+      console.log("✅ Checklist saved successfully:", result)
+      
+      // Show success message briefly before going back
+      alert("Checklist saved successfully!")
       onBack()
     } catch (error) {
-      console.error("Error saving checklist:", error)
+      console.error("❌ Error saving checklist:", error)
+      const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
+      setError(errorMessage)
+    } finally {
       setIsSubmitting(false)
-      // You might want to show an error message to the user here
     }
   }
 
@@ -91,6 +120,22 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
           </p>
         </div>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <Card className="mb-6 border-red-200 bg-red-50">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-red-900">Error Saving Checklist</h4>
+                <p className="text-sm text-red-700 mt-1">{error}</p>
+                <p className="text-xs text-red-600 mt-2">Check the browser console for more details.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Checklist Items */}
       <div className="space-y-4 mb-6">
