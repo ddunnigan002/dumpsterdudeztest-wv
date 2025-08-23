@@ -46,19 +46,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
     }
 
-    console.log("🔵 API: Getting authenticated user...")
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    console.log("🔵 API: Auth result:", { user: user?.id, authError })
-
-    if (authError || !user) {
-      console.error("❌ API: Authentication failed:", authError)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Create or get a default system user instead of requiring authentication
+    console.log("🔵 API: Using default system user (no login required)")
+    
+    // Use a default user ID - you can change this to any UUID you want
+    const defaultUserId = "00000000-0000-0000-0000-000000000000"
 
     // Helper function to safely get checklist item status
     const getItemStatus = (itemId: string) => {
@@ -72,7 +64,7 @@ export async function POST(request: NextRequest) {
     // Build checklist data object dynamically
     const checklistData = {
       vehicle_id: vehicle.id,
-      driver_id: user.id,
+      driver_id: defaultUserId, // Using default user instead of authenticated user
       checklist_date: new Date().toISOString().split("T")[0],
       overall_status: checklist.some((item: any) => item.status === "fail")
         ? "fail"
