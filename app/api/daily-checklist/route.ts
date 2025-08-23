@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Building checklist data...")
 
-    // Build checklist data object dynamically
+    // Build checklist data object dynamically - only with existing columns
     const checklistData = {
       vehicle_id: vehicle.id,
       driver_id: defaultUserId, // Using default user instead of authenticated user
@@ -71,9 +71,8 @@ export async function POST(request: NextRequest) {
         : checklist.some((item: any) => item.status === "service_soon")
           ? "pending"
           : "pass",
-      notes: notes || null,
-      checklist_items: JSON.stringify(checklist), // Store the full checklist data
-      photos: JSON.stringify(photoUrls || [])
+      notes: notes || null
+      // Removed checklist_items and photos columns - they don't exist in your table
     }
 
     console.log("🔵 API: Base checklist data:", JSON.stringify(checklistData, null, 2))
