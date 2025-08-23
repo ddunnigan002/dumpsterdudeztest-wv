@@ -92,9 +92,10 @@ export async function POST(request: NextRequest) {
       console.log(`🔵 API: Mapped ${frontendId} -> ${dbColumn} = ${status}`)
     })
 
-    // Set default values for removed items (if columns still exist in DB)
+    // Set default values for items not in frontend but exist in DB
     checklistData.mirrors_clean = true
     checklistData.safety_equipment_present = true
+    // Note: signature_url and created_at will be handled automatically by the database
 
     console.log("🔵 API: Final checklist data:", JSON.stringify(checklistData, null, 2))
 
