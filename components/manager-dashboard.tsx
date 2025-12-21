@@ -128,32 +128,27 @@ const ManagerDashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-7xl mx-auto space-y-6">
         <div className="flex items-center gap-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => router.push("/")}
-            className="flex items-center gap-2 border-orange-200 hover:bg-orange-50"
-          >
+          <Button variant="outline" size="sm" onClick={() => router.push("/")} className="flex items-center gap-2">
             <ArrowLeft className="h-4 w-4" />
             Back to Home
           </Button>
           <div className="flex items-center gap-4">
             <img src="/placeholder-a0q0x.png" alt="Dumpster Dudez" className="h-10 w-auto" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Fleet Management Dashboard</h1>
-              <p className="text-orange-600 font-medium">Dumpster Dudez - Manager View</p>
+              <h1 className="text-3xl font-bold text-foreground">Fleet Management Dashboard</h1>
+              <p className="text-primary font-medium">Dumpster Dudez - Manager View</p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-3">
-            <Card className="border-orange-200 shadow-lg">
-              <CardHeader className="bg-orange-50">
-                <CardTitle className="flex items-center gap-2 text-orange-800">
+            <Card className="border-primary/20 shadow-lg">
+              <CardHeader className="bg-primary/10">
+                <CardTitle className="flex items-center gap-2 text-primary">
                   <Truck className="h-5 w-5" />
                   Vehicle Status
                 </CardTitle>
@@ -173,28 +168,28 @@ const ManagerDashboard = () => {
                       return (
                         <Card
                           key={vehicle.id}
-                          className="cursor-pointer hover:shadow-md transition-shadow border-orange-100 hover:border-orange-300"
+                          className="cursor-pointer hover:shadow-md transition-shadow border-border hover:border-primary"
                           onClick={() => router.push(`/manager/vehicle/${vehicle.vehicle_number}`)}
                         >
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">
                               <div>
-                                <h3 className="font-semibold text-lg text-gray-900">
+                                <h3 className="font-semibold text-lg text-foreground">
                                   {vehicle.make} {vehicle.model}
                                 </h3>
-                                <p className="text-sm text-gray-600">
+                                <p className="text-sm text-muted-foreground">
                                   {vehicle.vehicle_number} • {vehicle.year}
                                 </p>
-                                <p className="text-sm text-gray-600">License: {vehicle.license_plate}</p>
+                                <p className="text-sm text-muted-foreground">License: {vehicle.license_plate}</p>
                               </div>
                               <Badge
                                 variant={vehicle.status === "active" ? "default" : "secondary"}
-                                className={vehicle.status === "active" ? "bg-orange-600 hover:bg-orange-700" : ""}
+                                className={vehicle.status === "active" ? "bg-primary hover:bg-primary/90" : ""}
                               >
                                 {vehicle.status}
                               </Badge>
                             </div>
-                            <div className="text-sm text-gray-600">
+                            <div className="text-sm text-muted-foreground">
                               Current Mileage: {vehicle.current_mileage?.toLocaleString()} mi
                             </div>
                           </CardContent>
@@ -202,7 +197,7 @@ const ManagerDashboard = () => {
                       )
                     })
                   ) : (
-                    <div className="col-span-2 text-center py-8 text-gray-500">No vehicles found</div>
+                    <div className="col-span-2 text-center py-8 text-muted-foreground">No vehicles found</div>
                   )}
                 </div>
               </CardContent>
@@ -211,9 +206,9 @@ const ManagerDashboard = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border-orange-200 shadow-lg">
-            <CardHeader className="bg-orange-50">
-              <CardTitle className="flex items-center gap-2 text-orange-800">
+          <Card className="border-primary/20 shadow-lg">
+            <CardHeader className="bg-primary/10">
+              <CardTitle className="flex items-center gap-2 text-primary">
                 <AlertTriangle className="h-5 w-5" />
                 Maintenance Alerts
               </CardTitle>
@@ -224,7 +219,7 @@ const ManagerDashboard = () => {
                   maintenanceAlerts.map((alert) => (
                     <div
                       key={alert.id}
-                      className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100"
+                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
@@ -233,17 +228,19 @@ const ManagerDashboard = () => {
                           </Badge>
                           <span className="font-medium">{alert.vehicleNumber}</span>
                         </div>
-                        <p className="text-sm text-gray-600">{alert.type}</p>
+                        <p className="text-sm text-muted-foreground">{alert.type}</p>
                         {alert.dueDate && (
-                          <p className="text-xs text-gray-500">Due: {new Date(alert.dueDate).toLocaleDateString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Due: {new Date(alert.dueDate).toLocaleDateString()}
+                          </p>
                         )}
                         {alert.dueMileage && (
-                          <p className="text-xs text-gray-500">Due: {alert.dueMileage.toLocaleString()} mi</p>
+                          <p className="text-xs text-muted-foreground">Due: {alert.dueMileage.toLocaleString()} mi</p>
                         )}
                       </div>
                       <Button
                         size="sm"
-                        className="bg-orange-600 hover:bg-orange-700"
+                        className="bg-primary hover:bg-primary/90"
                         onClick={() => handleCompleteMaintenanceClick(alert.vehicleNumber, alert.scheduledId)}
                       >
                         Complete
@@ -251,15 +248,15 @@ const ManagerDashboard = () => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No maintenance alerts</p>
+                  <p className="text-muted-foreground text-center py-4">No maintenance alerts</p>
                 )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-orange-200 shadow-lg">
-            <CardHeader className="bg-orange-50">
-              <CardTitle className="flex items-center gap-2 text-orange-800">
+          <Card className="border-primary/20 shadow-lg">
+            <CardHeader className="bg-primary/10">
+              <CardTitle className="flex items-center gap-2 text-primary">
                 <AlertTriangle className="h-5 w-5" />
                 Recent Issues
               </CardTitle>
@@ -270,22 +267,22 @@ const ManagerDashboard = () => {
                   recentIssues.map((issue) => (
                     <div
                       key={issue.id}
-                      className="flex items-center justify-between p-3 bg-orange-50 rounded-lg border border-orange-100"
+                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="border-orange-300 text-orange-700">
+                          <Badge variant="outline" className="border-primary text-primary">
                             {issue.vehicleNumber}
                           </Badge>
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-muted-foreground">
                             {new Date(issue.created_at).toLocaleDateString()}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-800">{issue.description}</p>
+                        <p className="text-sm text-foreground">{issue.description}</p>
                         {issue.status && (
                           <Badge
                             variant={issue.status === "resolved" ? "default" : "secondary"}
-                            className={issue.status === "resolved" ? "bg-orange-600 hover:bg-orange-700 mt-1" : "mt-1"}
+                            className={issue.status === "resolved" ? "bg-primary hover:bg-primary/90 mt-1" : "mt-1"}
                           >
                             {issue.status}
                           </Badge>
@@ -294,7 +291,7 @@ const ManagerDashboard = () => {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="border-orange-300 text-orange-700 hover:bg-orange-50 bg-transparent"
+                        className="border-primary text-primary hover:bg-primary/10 bg-transparent"
                         onClick={() => handleScheduleMaintenanceFromIssue(issue.id, issue.vehicleNumber)}
                       >
                         Schedule Maintenance
@@ -302,16 +299,16 @@ const ManagerDashboard = () => {
                     </div>
                   ))
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No recent issues</p>
+                  <p className="text-muted-foreground text-center py-4">No recent issues</p>
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border-orange-200 shadow-lg">
-          <CardHeader className="bg-orange-50">
-            <CardTitle className="flex items-center gap-2 text-orange-800">
+        <Card className="border-primary/20 shadow-lg">
+          <CardHeader className="bg-primary/10">
+            <CardTitle className="flex items-center gap-2 text-primary">
               <Settings className="h-5 w-5" />
               Quick Actions
             </CardTitle>
@@ -320,50 +317,50 @@ const ManagerDashboard = () => {
             <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/vehicles")}
               >
-                <Truck className="h-6 w-6 text-orange-600" />
+                <Truck className="h-6 w-6 text-primary" />
                 <span className="text-sm">Manage Vehicles</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/manager/reports/pre-trip")}
               >
-                <FileText className="h-6 w-6 text-orange-600" />
+                <FileText className="h-6 w-6 text-primary" />
                 <span className="text-sm">Pre-Trip Reports</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/manager/reports/gas-analytics")}
               >
-                <BarChart3 className="h-6 w-6 text-orange-600" />
+                <BarChart3 className="h-6 w-6 text-primary" />
                 <span className="text-sm">Gas Analytics</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/manager/data-override")}
               >
-                <Edit3 className="h-6 w-6 text-orange-600" />
+                <Edit3 className="h-6 w-6 text-primary" />
                 <span className="text-sm">Data Override</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/manager/audit-log")}
               >
-                <History className="h-6 w-6 text-orange-600" />
+                <History className="h-6 w-6 text-primary" />
                 <span className="text-sm">Audit Log</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col items-center gap-2 border-orange-200 hover:bg-orange-50 hover:border-orange-300 bg-transparent"
+                className="h-20 flex flex-col items-center gap-2 bg-transparent"
                 onClick={() => router.push("/manager/settings")}
               >
-                <Settings className="h-6 w-6 text-orange-600" />
+                <Settings className="h-6 w-6 text-primary" />
                 <span className="text-sm">Settings</span>
               </Button>
             </div>

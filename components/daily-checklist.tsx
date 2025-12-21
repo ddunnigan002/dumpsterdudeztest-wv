@@ -89,7 +89,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
       }
 
       console.log("✅ Checklist saved successfully:", result)
-      
+
       // Show success message briefly before going back
       alert("Checklist saved successfully!")
       onBack()
@@ -107,15 +107,15 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
   const hasServiceSoon = checklist.some((item) => item.status === "service_soon")
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Button variant="ghost" size="sm" onClick={onBack}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Pre-Trip Checklist</h1>
-          <p className="text-gray-600">
+          <h1 className="text-xl font-bold text-foreground">Pre-Trip Checklist</h1>
+          <p className="text-muted-foreground">
             {vehicleNumber} - {new Date().toLocaleDateString()}
           </p>
         </div>
@@ -123,14 +123,14 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
 
       {/* Error Display */}
       {error && (
-        <Card className="mb-6 border-red-200 bg-red-50">
+        <Card className="mb-6 border-destructive bg-destructive/10">
           <CardContent className="p-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
               <div>
-                <h4 className="font-medium text-red-900">Error Saving Checklist</h4>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-                <p className="text-xs text-red-600 mt-2">Check the browser console for more details.</p>
+                <h4 className="font-medium text-destructive">Error Saving Checklist</h4>
+                <p className="text-sm text-destructive/80 mt-1">{error}</p>
+                <p className="text-xs text-destructive/60 mt-2">Check the browser console for more details.</p>
               </div>
             </div>
           </CardContent>
@@ -144,8 +144,8 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
             <CardContent className="p-4">
               <div className="space-y-3">
                 <div>
-                  <h3 className="font-medium text-gray-900">{item.label}</h3>
-                  <p className="text-sm text-gray-600">{item.description}</p>
+                  <h3 className="font-medium text-foreground">{item.label}</h3>
+                  <p className="text-sm text-muted-foreground">{item.description}</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -161,7 +161,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
                   <Button
                     variant={item.status === "service_soon" ? "default" : "outline"}
                     size="sm"
-                    className={`flex-1 ${item.status === "service_soon" ? "bg-yellow-500 hover:bg-yellow-600 text-white" : ""}`}
+                    className={`flex-1 ${item.status === "service_soon" ? "bg-accent hover:bg-accent/90 text-accent-foreground" : ""}`}
                     onClick={() => updateChecklistItem(item.id, "service_soon")}
                   >
                     Service Soon
@@ -203,7 +203,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
             <CardTitle>Document Issues</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-gray-600 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Please take photos of any failed items or items needing service soon.
             </p>
             <PhotoUpload
@@ -225,7 +225,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
               <Badge
                 variant={hasFailures ? "destructive" : hasServiceSoon ? "secondary" : "secondary"}
                 className={
-                  hasFailures ? "" : hasServiceSoon ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"
+                  hasFailures ? "" : hasServiceSoon ? "bg-accent text-accent-foreground" : "bg-green-100 text-green-800"
                 }
               >
                 {hasFailures

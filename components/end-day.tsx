@@ -94,7 +94,7 @@ export default function EndDay({ vehicleId }: EndDayProps) {
 
   if (isSubmitted) {
     return (
-      <div className="min-h-screen bg-gray-50 p-4">
+      <div className="min-h-screen bg-background p-4">
         <div className="max-w-md mx-auto space-y-6">
           <div className="flex items-center justify-center">
             <h1 className="text-xl font-bold">End Day</h1>
@@ -106,7 +106,9 @@ export default function EndDay({ vehicleId }: EndDayProps) {
                 <Check className="h-8 w-8 text-green-600" />
               </div>
               <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
-              <p className="text-gray-600 mb-6">Your end of day mileage has been recorded. Have a great evening!</p>
+              <p className="text-muted-foreground mb-6">
+                Your end of day mileage has been recorded. Have a great evening!
+              </p>
               <Link href="/">
                 <Button className="w-full">Return to Home</Button>
               </Link>
@@ -118,7 +120,7 @@ export default function EndDay({ vehicleId }: EndDayProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-center">
@@ -128,15 +130,15 @@ export default function EndDay({ vehicleId }: EndDayProps) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
-              <Clock className="mr-2 h-5 w-5 text-purple-600" />
+              <Clock className="mr-2 h-5 w-5 text-primary" />
               {getVehicleDisplayName(vehicleId)} - End of Day
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               {startMileage && (
-                <div className="bg-blue-50 p-4 rounded-lg">
-                  <p className="text-sm text-blue-800">
+                <div className="bg-muted p-4 rounded-lg">
+                  <p className="text-sm text-foreground">
                     <strong>Starting Mileage:</strong> {startMileage.toLocaleString()} miles
                   </p>
                 </div>
@@ -166,7 +168,7 @@ export default function EndDay({ vehicleId }: EndDayProps) {
 
               <Button
                 type="submit"
-                className="w-full h-12 text-lg bg-purple-600 hover:bg-purple-700"
+                className="w-full h-12 text-lg bg-primary hover:bg-primary/90"
                 disabled={isSubmitting}
               >
                 {isSubmitting ? "Recording..." : "Complete Day"}
