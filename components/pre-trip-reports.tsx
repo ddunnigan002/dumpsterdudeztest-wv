@@ -49,10 +49,25 @@ export default function PreTripReports() {
   const [viewMode, setViewMode] = useState<"calendar" | "details">("calendar")
   const [selectedVehicle, setSelectedVehicle] = useState<string>("All")
   const [selectedChecklistType, setSelectedChecklistType] = useState<string>("All")
+  const [vehicles, setVehicles] = useState<Array<{ id: string; vehicle_number: string }>>([])
 
   useEffect(() => {
     fetchReports()
+    fetchVehicles()
   }, [currentDate])
+
+  const fetchVehicles = async () => {
+    try {
+      const response = await fetch("/api/vehicles")
+      if (response.ok) {
+        const data = await response.json()
+        setVehicles(data.vehicles || [])
+      }
+    } catch (error) {
+      console.error("Error fetching vehicles:", error)
+      setVehicles([])
+    }
+  }
 
   const fetchReports = async () => {
     try {
@@ -290,15 +305,23 @@ export default function PreTripReports() {
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">Vehicle:</span>
               <div className="flex gap-1">
-                {["All", "CHEVY", "KENWORTH"].map((vehicle) => (
+                <Button
+                  variant={selectedVehicle === "All" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedVehicle("All")}
+                  className={selectedVehicle === "All" ? "bg-orange-600 hover:bg-orange-700" : ""}
+                >
+                  All
+                </Button>
+                {vehicles.map((vehicle) => (
                   <Button
-                    key={vehicle}
-                    variant={selectedVehicle === vehicle ? "default" : "outline"}
+                    key={vehicle.id}
+                    variant={selectedVehicle === vehicle.vehicle_number ? "default" : "outline"}
                     size="sm"
-                    onClick={() => setSelectedVehicle(vehicle)}
-                    className={selectedVehicle === vehicle ? "bg-orange-600 hover:bg-orange-700" : ""}
+                    onClick={() => setSelectedVehicle(vehicle.vehicle_number)}
+                    className={selectedVehicle === vehicle.vehicle_number ? "bg-orange-600 hover:bg-orange-700" : ""}
                   >
-                    {vehicle}
+                    {vehicle.vehicle_number}
                   </Button>
                 ))}
               </div>

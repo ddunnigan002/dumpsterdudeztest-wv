@@ -91,7 +91,13 @@ export function ManagerSettings() {
   }
 
   const handleAddVehicle = async () => {
-    if (!newVehicle.vehicle_number || !newVehicle.make || !newVehicle.model) return
+    if (!newVehicle.vehicle_number || !newVehicle.make || !newVehicle.model) {
+      console.log("[v0] Manager Settings: Missing required fields")
+      alert("Please fill in Vehicle Number, Make, and Model")
+      return
+    }
+
+    console.log("[v0] Manager Settings: Attempting to add vehicle:", newVehicle)
 
     try {
       const response = await fetch("/api/vehicles", {
@@ -100,7 +106,13 @@ export function ManagerSettings() {
         body: JSON.stringify(newVehicle),
       })
 
+      console.log("[v0] Manager Settings: Response status:", response.status)
+
+      // Check if the response is OK before trying to parse JSON
       if (response.ok) {
+        const data = await response.json()
+        console.log("[v0] Manager Settings: Response data:", data)
+        console.log("[v0] Manager Settings: Vehicle added successfully")
         setNewVehicle({
           vehicle_number: "",
           make: "",
@@ -112,9 +124,23 @@ export function ManagerSettings() {
         })
         setShowAddVehicle(false)
         fetchVehicles()
+        alert("Vehicle added successfully!")
+      } else {
+        // Try to parse error message from response if available
+        let errorMessage = "Unknown error"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || JSON.stringify(errorData)
+        } catch (jsonError) {
+          // If response is not JSON, use text
+          errorMessage = await response.text()
+        }
+        console.error("[v0] Manager Settings: Failed to add vehicle:", response.status, errorMessage)
+        alert(`Failed to add vehicle: ${errorMessage}`)
       }
     } catch (error) {
-      console.error("Failed to add vehicle:", error)
+      console.error("[v0] Manager Settings: Error:", error)
+      alert(`Error adding vehicle: ${error instanceof Error ? error.message : "Unknown error"}`)
     }
   }
 
