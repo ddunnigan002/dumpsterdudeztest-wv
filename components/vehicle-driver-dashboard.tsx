@@ -5,6 +5,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   CheckSquare,
   Fuel,
   AlertTriangle,
@@ -32,10 +40,31 @@ interface VehicleDriverDashboardProps {
 export default function VehicleDriverDashboard({ vehicleId, userProfile }: VehicleDriverDashboardProps) {
   const router = useRouter()
   const [maintenanceAlerts, setMaintenanceAlerts] = useState<any[]>([])
+  const [weeklyDueDate, setWeeklyDueDate] = useState<string>("")
+  const [monthlyDueDate, setMonthlyDueDate] = useState<string>("")
+  const [showEndDayReminder, setShowEndDayReminder] = useState(false)
+  const [yesterdayDate, setYesterdayDate] = useState<string>("")
 
   useEffect(() => {
     fetchMaintenanceAlerts()
+    fetchChecklistDueDates()
+    checkEndDayStatus()
   }, [vehicleId])
+
+  const checkEndDayStatus = async () => {
+    try {
+      const response = await fetch(`/api/check-end-day?vehicleId=${vehicleId}`)
+      if (response.ok) {
+        const data = await response.json()
+        if (data.needsEndDay) {
+          setShowEndDayReminder(true)
+          setYesterdayDate(data.yesterdayFormatted)
+        }
+      }
+    } catch (error) {
+      console.error("Error checking end day status:", error)
+    }
+  }
 
   const fetchMaintenanceAlerts = async () => {
     try {
@@ -68,6 +97,53 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
     }
   }
 
+  const fetchChecklistDueDates = async () => {
+    try {
+      const [weeklyRes, monthlyRes] = await Promise.all([
+        fetch("/api/checklist-settings?type=weekly"),
+        fetch("/api/checklist-settings?type=monthly"),
+      ])
+
+      if (weeklyRes.ok) {
+        const data = await weeklyRes.json()
+        if (data.settings && data.settings.length > 0) {
+          const nextDue = getNextWeeklyDueDate(data.settings[0].due_day_of_week)
+          setWeeklyDueDate(nextDue)
+        }
+      }
+
+      if (monthlyRes.ok) {
+        const data = await monthlyRes.json()
+        if (data.settings && data.settings.length > 0) {
+          const nextDue = getNextMonthlyDueDate(data.settings[0].due_day_of_month)
+          setMonthlyDueDate(nextDue)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching checklist due dates:", error)
+    }
+  }
+
+  const getNextWeeklyDueDate = (dayOfWeek: number): string => {
+    const today = new Date()
+    const currentDay = today.getDay()
+    const daysUntilDue = (dayOfWeek - currentDay + 7) % 7 || 7
+    const dueDate = new Date(today)
+    dueDate.setDate(today.getDate() + daysUntilDue)
+    return dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
+
+  const getNextMonthlyDueDate = (dayOfMonth: number): string => {
+    const today = new Date()
+    const currentMonth = today.getMonth()
+    const currentYear = today.getFullYear()
+    let dueDate = new Date(currentYear, currentMonth, dayOfMonth)
+    if (dueDate < today) {
+      dueDate = new Date(currentYear, currentMonth + 1, dayOfMonth)
+    }
+    return dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+  }
+
   const handleCompleteMaintenanceClick = () => {
     router.push(`/vehicle/${vehicleId}/enter-maintenance`)
   }
@@ -85,6 +161,43 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
 
   return (
     <div className="min-h-screen bg-background p-4">
+      <Dialog open={showEndDayReminder} onOpenChange={setShowEndDayReminder}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Clock className="h-5 w-5" />
+              End Day Reminder
+            </DialogTitle>
+            <DialogDescription>
+              You need to complete the "End Day" task for {yesterdayDate} before starting today's checklist.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 py-4">
+            <Alert className="border-destructive bg-destructive/10">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              <AlertDescription className="text-destructive">
+                Please record yesterday's ending mileage and any issues before proceeding with today's tasks.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter className="flex-col sm:flex-col gap-2">
+            <Button
+              onClick={() => {
+                setShowEndDayReminder(false)
+                router.push(`/vehicle/${vehicleId}/end-day`)
+              }}
+              className="w-full bg-destructive hover:bg-destructive/90"
+            >
+              <Clock className="mr-2 h-4 w-4" />
+              Complete End Day for {yesterdayDate}
+            </Button>
+            <Button variant="outline" onClick={() => setShowEndDayReminder(false)} className="w-full">
+              I'll do this later
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="max-w-md mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -178,21 +291,27 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
           <CardContent className="space-y-3">
             <Link href={`/vehicle/${vehicleId}/weekly-checklist`} className="block">
               <Button
-                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground flex items-center justify-between px-4"
                 size="lg"
               >
-                <Calendar className="mr-3 h-5 w-5" />
-                Weekly Checklist
+                <div className="flex items-center">
+                  <Calendar className="mr-3 h-5 w-5" />
+                  <span>Weekly Checklist</span>
+                </div>
+                {weeklyDueDate && <span className="text-xs opacity-80">Due {weeklyDueDate}</span>}
               </Button>
             </Link>
 
             <Link href={`/vehicle/${vehicleId}/monthly-checklist`} className="block">
               <Button
-                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground"
+                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground flex items-center justify-between px-4"
                 size="lg"
               >
-                <CalendarDays className="mr-3 h-5 w-5" />
-                Monthly Checklist
+                <div className="flex items-center">
+                  <CalendarDays className="mr-3 h-5 w-5" />
+                  <span>Monthly Checklist</span>
+                </div>
+                {monthlyDueDate && <span className="text-xs opacity-80">Due {monthlyDueDate}</span>}
               </Button>
             </Link>
 

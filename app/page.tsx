@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Settings, BarChart3 } from "lucide-react"
@@ -8,17 +8,26 @@ import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function Home() {
+  const [vehicles, setVehicles] = useState([])
+  const [loading, setLoading] = useState(true)
+
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker
-        .register("/sw.js")
-        .then((registration) => {
-          console.log("SW registered: ", registration)
-        })
-        .catch((registrationError) => {
-          console.log("SW registration failed: ", registrationError)
-        })
+    const fetchVehicles = async () => {
+      try {
+        const response = await fetch("/api/vehicles")
+        if (response.ok) {
+          const data = await response.json()
+          const vehiclesArray = data.vehicles || data || []
+          setVehicles(vehiclesArray)
+        }
+      } catch (error) {
+        console.error("Error fetching vehicles:", error)
+      } finally {
+        setLoading(false)
+      }
     }
+
+    fetchVehicles()
   }, [])
 
   return (
@@ -46,56 +55,64 @@ export default function Home() {
         </div>
 
         <div className="space-y-3">
-          <Link href="/vehicle/CHEVY" className="block">
-            <Card className="bg-card hover:bg-muted/50 transition-all duration-200 border-border hover:border-accent/30 active:scale-[0.98] cursor-pointer">
-              <CardHeader className="pb-4">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0">
-                    <Image src="/images/chevy-logo.png" alt="Chevy" width={24} height={24} className="h-6 w-6" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <CardTitle className="text-lg text-card-foreground">CHEVY</CardTitle>
-                    <CardDescription className="text-muted-foreground">Unit #001</CardDescription>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-accent font-medium">Active</div>
-                    <div className="text-xs text-muted-foreground">Last: Today</div>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
-
-          <Link href="/vehicle/KENWORTH" className="block">
-            <Card className="bg-card hover:bg-muted/50 transition-all duration-200 border-border hover:border-accent/30 active:scale-[0.98] cursor-pointer">
-              <CardHeader className="pb-4">
-                <div className="flex items-center space-x-4">
-                  <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0">
-                    <Image src="/images/kenworth-logo.png" alt="Kenworth" width={24} height={24} className="h-6 w-6" />
-                  </div>
-                  <div className="text-left flex-1">
-                    <CardTitle className="text-lg text-card-foreground">KENWORTH</CardTitle>
-                    <CardDescription className="text-muted-foreground">Unit #002</CardDescription>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-accent font-medium">Active</div>
-                    <div className="text-xs text-muted-foreground">Last: Yesterday</div>
-                  </div>
-                </div>
-              </CardHeader>
-            </Card>
-          </Link>
+          {loading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading vehicles...</div>
+          ) : vehicles.length > 0 ? (
+            vehicles.map((vehicle) => (
+              <Link key={vehicle.id} href={`/vehicle/${vehicle.vehicle_number}`} className="block">
+                <Card className="bg-card hover:bg-muted/50 transition-all duration-200 border-border hover:border-accent/30 active:scale-[0.98] cursor-pointer">
+                  <CardHeader className="pb-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0">
+                        <Image
+                          src={`/images/${vehicle.make.toLowerCase()}-logo.png`}
+                          alt={vehicle.make}
+                          width={24}
+                          height={24}
+                          className="h-6 w-6"
+                        />
+                      </div>
+                      <div className="text-left flex-1">
+                        <CardTitle className="text-lg text-card-foreground">{vehicle.vehicle_number}</CardTitle>
+                        <CardDescription className="text-muted-foreground">
+                          {vehicle.make} {vehicle.model}
+                        </CardDescription>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-accent font-medium capitalize">{vehicle.status}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {vehicle.current_mileage?.toLocaleString()} mi
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-4">No vehicles found in your fleet</p>
+              <Link href="/manager/settings">
+                <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Add Vehicles in Settings
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
 
-        <div className="mt-8 text-center">
-          <Link href="/manager/reports/gas-analytics">
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-medium">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Fleet Reports
-            </Button>
-          </Link>
-          <p className="text-sm text-muted-foreground mt-2">Analytics & maintenance reports</p>
-        </div>
+        {vehicles.length > 0 && (
+          <div className="mt-8 text-center">
+            <Link href="/manager/reports/gas-analytics">
+              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-medium">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                View Fleet Reports
+              </Button>
+            </Link>
+            <p className="text-sm text-muted-foreground mt-2">Analytics & maintenance reports</p>
+          </div>
+        )}
 
         <div className="h-8"></div>
       </main>

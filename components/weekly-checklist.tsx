@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle, ArrowLeft, Calendar } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 interface WeeklyChecklistProps {
@@ -19,6 +19,7 @@ interface ChecklistItem {
 }
 
 function WeeklyChecklist({ vehicleId }: WeeklyChecklistProps) {
+  const [dueDate, setDueDate] = useState<string>("")
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     {
       id: "grease_chassis_points",
@@ -27,51 +28,33 @@ function WeeklyChecklist({ vehicleId }: WeeklyChecklistProps) {
       status: null,
     },
     {
-      id: "lubricate_hooklift_points",
-      label: "Lubricate Hooklift",
-      description: "Lubricate hooklift pivot points & rollers",
+      id: "check_engine_oil",
+      label: "Engine Oil",
+      description: "Check engine oil level and condition",
       status: null,
     },
     {
-      id: "inspect_hydraulic_cylinders",
-      label: "Hydraulic Cylinders",
-      description: "Inspect hydraulic cylinders for pitting or excessive wear",
+      id: "check_transmission_fluid",
+      label: "Transmission Fluid",
+      description: "Check transmission fluid level and condition",
+      status: null,
+    },
+    {
+      id: "check_antifreeze",
+      label: "Antifreeze",
+      description: "Check antifreeze/coolant level",
+      status: null,
+    },
+    {
+      id: "check_windshield_fluid",
+      label: "Windshield Fluid",
+      description: "Check and top off windshield washer fluid",
       status: null,
     },
     {
       id: "inspect_hydraulic_filter",
       label: "Hydraulic Filter",
       description: "Inspect hydraulic filter sight glass for contamination/cloudiness",
-      status: null,
-    },
-    {
-      id: "clean_battery_terminals",
-      label: "Battery Terminals",
-      description: "Clean and check battery terminals for corrosion",
-      status: null,
-    },
-    {
-      id: "check_def_fluid",
-      label: "DEF Fluid",
-      description: "Check DEF fluid (for diesel emissions systems)",
-      status: null,
-    },
-    {
-      id: "torque_wheel_lugs",
-      label: "Wheel Lug Nuts",
-      description: "Torque-check wheel lug nuts (especially after tire work)",
-      status: null,
-    },
-    {
-      id: "inspect_tarp_straps",
-      label: "Tarp Straps",
-      description: "Inspect tarp straps, ropes, or motors for fraying/wear",
-      status: null,
-    },
-    {
-      id: "check_door_latches",
-      label: "Door Latches",
-      description: "Check door latches and hinges on dumpster gates for bending/wear",
       status: null,
     },
     {
@@ -84,6 +67,37 @@ function WeeklyChecklist({ vehicleId }: WeeklyChecklistProps) {
 
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    fetchDueDate()
+  }, [])
+
+  const fetchDueDate = async () => {
+    try {
+      const response = await fetch("/api/checklist-settings?type=weekly")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.settings && data.settings.length > 0) {
+          const setting = data.settings[0]
+          const nextDueDate = getNextDueDate(setting.due_day_of_week)
+          setDueDate(nextDueDate)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching due date:", error)
+      const nextDueDate = getNextDueDate(4)
+      setDueDate(nextDueDate)
+    }
+  }
+
+  const getNextDueDate = (dayOfWeek: number): string => {
+    const today = new Date()
+    const currentDay = today.getDay()
+    const daysUntilDue = (dayOfWeek - currentDay + 7) % 7 || 7
+    const dueDate = new Date(today)
+    dueDate.setDate(today.getDate() + daysUntilDue)
+    return dueDate.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })
+  }
 
   const updateChecklistItem = (id: string, status: "pass" | "service_soon" | "fail") => {
     setChecklist((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)))
@@ -110,7 +124,6 @@ function WeeklyChecklist({ vehicleId }: WeeklyChecklistProps) {
       }
 
       setIsSubmitting(false)
-      // Navigate back to vehicle dashboard
       window.history.back()
     } catch (error) {
       console.error("Error saving weekly checklist:", error)
@@ -125,12 +138,21 @@ function WeeklyChecklist({ vehicleId }: WeeklyChecklistProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 p-4">
       {/* Header */}
-      <div className="flex items-center justify-center mb-6">
-        <div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-orange-600">Weekly Maintenance</h1>
-          <p className="text-gray-600 text-center">
+          <p className="text-gray-600">
             {vehicleId} - {new Date().toLocaleDateString()}
           </p>
+          {dueDate && (
+            <div className="flex items-center gap-2 mt-1">
+              <Calendar className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-medium text-orange-600">Due: {dueDate}</span>
+            </div>
+          )}
         </div>
       </div>
 

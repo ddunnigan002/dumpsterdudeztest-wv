@@ -8,66 +8,38 @@ function isValidUUID(str: string): boolean {
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    console.log("[v0] Vehicle by ID API: Fetching vehicle with ID:", params.id)
     const supabase = createClient()
 
-    // First try to find by vehicle_number (like "CHEVY", "KENWORTH")
-    let { data, error } = await supabase
-      .from("vehicles")
-      .select("*")
-      .eq("vehicle_number", params.id.toUpperCase())
-      .maybeSingle()
+    // First try by exact ID match
+    let { data, error } = await supabase.from("vehicles").select("*").eq("id", params.id).maybeSingle()
 
-    // If not found by vehicle_number and the ID looks like a UUID, try by UUID
-    if (!data && !error && isValidUUID(params.id)) {
-      const { data: uuidData, error: uuidError } = await supabase
+    // If not found, try by vehicle_number
+    if (!data && !error) {
+      const { data: byNumber, error: numberError } = await supabase
         .from("vehicles")
         .select("*")
-        .eq("id", params.id)
+        .eq("vehicle_number", params.id.toUpperCase())
         .maybeSingle()
 
-      data = uuidData
-      error = uuidError
+      data = byNumber
+      error = numberError
     }
 
-    // If still no data found, return mock data for testing
     if (!data && !error) {
-      // Return mock data based on vehicle identifier
-      if (params.id.toUpperCase() === "CHEVY") {
-        return NextResponse.json({
-          id: "mock-chevy-id",
-          vehicle_number: "CHEVY",
-          make: "Chevrolet",
-          model: "6500",
-          year: 2020,
-          current_mileage: 45000,
-          license_plate: "DD-001",
-          vin: "1GB6G5BG8L1234567",
-          status: "active",
-        })
-      } else if (params.id.toUpperCase() === "KENWORTH") {
-        return NextResponse.json({
-          id: "mock-kenworth-id",
-          vehicle_number: "KENWORTH",
-          make: "Kenworth",
-          model: "T280",
-          year: 2019,
-          current_mileage: 62000,
-          license_plate: "DD-002",
-          vin: "1XKAD49X0KJ123456",
-          status: "active",
-        })
-      }
+      console.log("[v0] Vehicle by ID API: Vehicle not found")
       return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
     }
 
     if (error) {
-      console.error("Database error:", error)
+      console.error("[v0] Vehicle by ID API: Database error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
+    console.log("[v0] Vehicle by ID API: Returning vehicle from database")
     return NextResponse.json(data)
   } catch (error) {
-    console.error("API error:", error)
+    console.error("[v0] Vehicle by ID API: Caught error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, XCircle } from "lucide-react"
+import { CheckCircle, XCircle, ArrowLeft, Calendar } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 interface MonthlyChecklistProps {
@@ -19,6 +19,7 @@ interface ChecklistItem {
 }
 
 function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
+  const [dueDate, setDueDate] = useState<string>("")
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     {
       id: "change_engine_oil",
@@ -31,12 +32,6 @@ function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
       id: "inspect_brake_system",
       label: "Brake System",
       description: "Inspect brake pads/shoes, drums/rotors, and slack adjusters",
-      status: null,
-    },
-    {
-      id: "check_transmission_fluid",
-      label: "Transmission Fluid",
-      description: "Check transmission fluid level & condition",
       status: null,
     },
     {
@@ -58,18 +53,6 @@ function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
       status: null,
     },
     {
-      id: "check_pto_operation",
-      label: "PTO Operation",
-      description: "Check PTO operation and fluid level",
-      status: null,
-    },
-    {
-      id: "inspect_exhaust_system",
-      label: "Exhaust System",
-      description: "Inspect exhaust system for leaks/damage",
-      status: null,
-    },
-    {
       id: "test_block_heater",
       label: "Block Heater",
       description: "Test block heater & cold-weather systems (seasonal)",
@@ -81,16 +64,45 @@ function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
       description: "Deep clean radiator & intercooler fins (prevents overheating)",
       status: null,
     },
-    {
-      id: "inspect_suspension_bushings",
-      label: "Suspension",
-      description: "Inspect suspension bushings and mounts",
-      status: null,
-    },
   ])
 
   const [notes, setNotes] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    fetchDueDate()
+  }, [])
+
+  const fetchDueDate = async () => {
+    try {
+      const response = await fetch("/api/checklist-settings?type=monthly")
+      if (response.ok) {
+        const data = await response.json()
+        if (data.settings && data.settings.length > 0) {
+          const setting = data.settings[0]
+          const nextDueDate = getNextDueDate(setting.due_day_of_month)
+          setDueDate(nextDueDate)
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching due date:", error)
+      const nextDueDate = getNextDueDate(1)
+      setDueDate(nextDueDate)
+    }
+  }
+
+  const getNextDueDate = (dayOfMonth: number): string => {
+    const today = new Date()
+    const currentMonth = today.getMonth()
+    const currentYear = today.getFullYear()
+    let dueDate = new Date(currentYear, currentMonth, dayOfMonth)
+
+    if (dueDate < today) {
+      dueDate = new Date(currentYear, currentMonth + 1, dayOfMonth)
+    }
+
+    return dueDate.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+  }
 
   const updateChecklistItem = (id: string, status: "pass" | "service_soon" | "fail") => {
     setChecklist((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)))
@@ -117,7 +129,6 @@ function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
       }
 
       setIsSubmitting(false)
-      // Navigate back to vehicle dashboard
       window.history.back()
     } catch (error) {
       console.error("Error saving monthly checklist:", error)
@@ -132,12 +143,21 @@ function MonthlyChecklist({ vehicleId }: MonthlyChecklistProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 p-4">
       {/* Header */}
-      <div className="flex items-center justify-center mb-6">
-        <div>
+      <div className="flex items-center gap-3 mb-6">
+        <Button variant="ghost" size="sm" onClick={() => window.history.back()}>
+          <ArrowLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex-1">
           <h1 className="text-xl font-bold text-orange-600">Monthly Service</h1>
-          <p className="text-gray-600 text-center">
+          <p className="text-gray-600">
             {vehicleId} - {new Date().toLocaleDateString()}
           </p>
+          {dueDate && (
+            <div className="flex items-center gap-2 mt-1">
+              <Calendar className="h-4 w-4 text-orange-600" />
+              <span className="text-sm font-medium text-orange-600">Due: {dueDate}</span>
+            </div>
+          )}
         </div>
       </div>
 

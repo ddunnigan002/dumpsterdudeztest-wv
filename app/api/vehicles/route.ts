@@ -16,14 +16,14 @@ export async function GET() {
 
     if (error) {
       console.error("Database error:", error)
-      return NextResponse.json({ error: "Failed to fetch vehicles" }, { status: 500 })
+      return NextResponse.json({ vehicles: [] })
     }
 
-    console.log("[v0] Vehicles API: Returning vehicles:", vehicles)
-    return NextResponse.json({ vehicles })
+    console.log("[v0] Vehicles API: Returning vehicles:", vehicles || [])
+    return NextResponse.json({ vehicles: vehicles || [] })
   } catch (error) {
     console.error("API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ vehicles: [] })
   }
 }
 

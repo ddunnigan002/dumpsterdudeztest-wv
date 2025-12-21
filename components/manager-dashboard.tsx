@@ -37,55 +37,13 @@ const ManagerDashboard = () => {
         setVehicles(vehiclesArray)
         console.log("[v0] Manager Dashboard: Vehicles state set to:", vehiclesArray)
       } else {
-        console.log("[v0] Manager Dashboard: API failed, using fallback data")
-        setVehicles([
-          {
-            id: "chevy-6500",
-            vehicle_number: "CHEVY",
-            make: "Chevrolet",
-            model: "6500",
-            year: 2018,
-            current_mileage: 45234,
-            status: "active",
-            license_plate: "DD-001",
-          },
-          {
-            id: "kenworth-t280",
-            vehicle_number: "KENWORTH",
-            make: "Kenworth",
-            model: "T280",
-            year: 2019,
-            current_mileage: 38567,
-            status: "active",
-            license_plate: "DD-002",
-          },
-        ])
+        console.log("[v0] Manager Dashboard: API failed, setting empty vehicles array")
+        setVehicles([])
       }
     } catch (error) {
       console.error("Error fetching vehicles:", error)
-      console.log("[v0] Manager Dashboard: Error occurred, using fallback data")
-      setVehicles([
-        {
-          id: "chevy-6500",
-          vehicle_number: "CHEVY",
-          make: "Chevrolet",
-          model: "6500",
-          year: 2018,
-          current_mileage: 45234,
-          status: "active",
-          license_plate: "DD-001",
-        },
-        {
-          id: "kenworth-t280",
-          vehicle_number: "KENWORTH",
-          make: "Kenworth",
-          model: "T280",
-          year: 2019,
-          current_mileage: 38567,
-          status: "active",
-          license_plate: "DD-002",
-        },
-      ])
+      console.log("[v0] Manager Dashboard: Error occurred, setting empty vehicles array")
+      setVehicles([])
     }
   }
 
@@ -110,25 +68,10 @@ const ManagerDashboard = () => {
         }
       }
       console.log("[v0] Total issues found:", issues.length)
-      setRecentIssues(issues.slice(0, 5)) // Show only 5 most recent
+      setRecentIssues(issues.slice(0, 5))
     } catch (error) {
       console.error("Error fetching recent issues:", error)
-      setRecentIssues([
-        {
-          id: "issue-1",
-          vehicleNumber: "CHEVY",
-          description: "Hydraulic fluid leak detected",
-          status: "open",
-          created_at: new Date().toISOString(),
-        },
-        {
-          id: "issue-2",
-          vehicleNumber: "KENWORTH",
-          description: "Brake pads need replacement",
-          status: "open",
-          created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-        },
-      ])
+      setRecentIssues([])
     }
   }
 
@@ -167,35 +110,7 @@ const ManagerDashboard = () => {
         setMaintenanceAlerts(alerts)
       } catch (error) {
         console.error("Error fetching maintenance alerts:", error)
-        setMaintenanceAlerts([
-          {
-            id: "1",
-            vehicleNumber: "CHEVY",
-            type: "Oil Change",
-            dueDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            dueMileage: 45500,
-            priority: "high",
-            scheduledId: "oil-change-1",
-          },
-          {
-            id: "2",
-            vehicleNumber: "CHEVY",
-            type: "PTO Service",
-            dueDate: "2024-02-20",
-            dueMileage: 46000,
-            priority: "medium",
-            scheduledId: "pto-service-1",
-          },
-          {
-            id: "3",
-            vehicleNumber: "KENWORTH",
-            type: "Brake Inspection",
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-            dueMileage: 39000,
-            priority: "high",
-            scheduledId: "brake-inspection-1",
-          },
-        ])
+        setMaintenanceAlerts([])
       }
     }
 
