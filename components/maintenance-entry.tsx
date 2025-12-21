@@ -52,49 +52,14 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
           if (data && data.length > 0) {
             setScheduledItems(data)
           } else {
-            console.log("API returned empty data, using fallback data")
-            setScheduledItems([
-              {
-                id: "1",
-                maintenance_type: "Oil Change",
-                due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Tomorrow
-              },
-              {
-                id: "2",
-                maintenance_type: "PTO Service",
-                due_mileage: 85000,
-              },
-            ])
+            setScheduledItems([])
           }
         } else {
-          console.log("API failed, using fallback data")
-          setScheduledItems([
-            {
-              id: "1",
-              maintenance_type: "Oil Change",
-              due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Tomorrow
-            },
-            {
-              id: "2",
-              maintenance_type: "PTO Service",
-              due_mileage: 85000,
-            },
-          ])
+          setScheduledItems([])
         }
       } catch (error) {
         console.error("Error fetching scheduled maintenance:", error)
-        setScheduledItems([
-          {
-            id: "1",
-            maintenance_type: "Oil Change",
-            due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Tomorrow
-          },
-          {
-            id: "2",
-            maintenance_type: "PTO Service",
-            due_mileage: 85000,
-          },
-        ])
+        setScheduledItems([])
       }
     }
 
