@@ -43,6 +43,11 @@ export default function EndDay({ vehicleId }: EndDayProps) {
     e.preventDefault()
     setIsSubmitting(true)
 
+    console.log("[v0] End Day Component: Starting submission", {
+      vehicleId,
+      endMileage: formData.endMileage,
+    })
+
     try {
       const response = await fetch("/api/end-day", {
         method: "POST",
@@ -56,12 +61,19 @@ export default function EndDay({ vehicleId }: EndDayProps) {
         }),
       })
 
+      console.log("[v0] End Day Component: Response status", response.status)
+
       if (response.ok) {
+        const result = await response.json()
+        console.log("[v0] End Day Component: Success response", result)
         setIsSubmitted(true)
         setFormData({ endMileage: "" })
+      } else {
+        const errorData = await response.json()
+        console.error("[v0] End Day Component: Error response", errorData)
       }
     } catch (error) {
-      console.error("Error submitting end day:", error)
+      console.error("[v0] End Day Component: Caught error", error)
     } finally {
       setIsSubmitting(false)
     }

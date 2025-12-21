@@ -11,21 +11,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Vehicle ID required" }, { status: 400 })
     }
 
+    let actualVehicleId = vehicleId
+
+    // Check if vehicleId is a UUID (has dashes) or a vehicle_number
+    const isUUID = vehicleId.includes("-")
+
+    if (!isUUID) {
+      // Look up vehicle by vehicle_number
+      const { data: vehicle, error: vehicleError } = await supabase
+        .from("vehicles")
+        .select("id")
+        .eq("vehicle_number", vehicleId)
+        .maybeSingle()
+
+      if (vehicleError || !vehicle) {
+        return NextResponse.json({ needsEndDay: false })
+      }
+
+      actualVehicleId = vehicle.id
+    }
+
     // Get yesterday's date
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
     const yesterdayStr = yesterday.toISOString().split("T")[0]
 
-    // Check if there's an end day log for yesterday
     const { data, error } = await supabase
       .from("daily_logs")
       .select("*")
-      .eq("vehicle_id", vehicleId)
+      .eq("vehicle_id", actualVehicleId)
       .eq("log_date", yesterdayStr)
-      .single()
+      .maybeSingle()
 
-    if (error && error.code !== "PGRST116") {
-      // PGRST116 is "not found" error, which is expected
+    if (error) {
       console.error("[v0] Error checking end day:", error)
       return NextResponse.json({ needsEndDay: false, yesterdayDate: yesterdayStr })
     }

@@ -9,10 +9,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .from("vehicles")
       .select("id")
       .eq("vehicle_number", params.id)
-      .single()
+      .maybeSingle()
 
-    if (vehicleError) {
-      throw vehicleError
+    if (vehicleError || !vehicle) {
+      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
     }
 
     const { data: lastLog, error } = await supabase
@@ -21,11 +21,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .eq("vehicle_id", vehicle.id)
       .order("created_at", { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
-    if (error && error.code !== "PGRST116") {
-      // PGRST116 is "no rows returned"
-      throw error
+    if (error) {
+      console.error("Error fetching last log:", error)
+      return NextResponse.json({ error: "Failed to fetch last mileage" }, { status: 500 })
     }
 
     return NextResponse.json({
