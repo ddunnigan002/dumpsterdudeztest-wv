@@ -11,19 +11,22 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     console.log("[v0] Vehicle by ID API: Fetching vehicle with ID:", params.id)
     const supabase = createClient()
 
-    // First try by exact ID match
-    let { data, error } = await supabase.from("vehicles").select("*").eq("id", params.id).maybeSingle()
+    let data, error
 
-    // If not found, try by vehicle_number
-    if (!data && !error) {
-      const { data: byNumber, error: numberError } = await supabase
+    if (isValidUUID(params.id)) {
+      // Query by UUID id
+      const result = await supabase.from("vehicles").select("*").eq("id", params.id).maybeSingle()
+      data = result.data
+      error = result.error
+    } else {
+      // Query by vehicle_number
+      const result = await supabase
         .from("vehicles")
         .select("*")
         .eq("vehicle_number", params.id.toUpperCase())
         .maybeSingle()
-
-      data = byNumber
-      error = numberError
+      data = result.data
+      error = result.error
     }
 
     if (!data && !error) {

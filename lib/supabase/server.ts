@@ -1,6 +1,5 @@
-import { createServerComponentClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient, type CookieOptions } from "@supabase/ssr"
 import { cookies } from "next/headers"
-import { cache } from "react"
 
 export const isSupabaseConfigured =
   typeof process.env.NEXT_PUBLIC_SUPABASE_URL === "string" &&
@@ -8,46 +7,20 @@ export const isSupabaseConfigured =
   typeof process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY === "string" &&
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length > 0
 
-export const createClient = cache(() => {
+export function createClient() {
   const cookieStore = cookies()
 
   if (!isSupabaseConfigured) {
     console.warn("Supabase environment variables are not set. Using dummy client.")
-
     const createDummyQueryBuilder = () => ({
       select: () => createDummyQueryBuilder(),
       insert: () => createDummyQueryBuilder(),
       update: () => createDummyQueryBuilder(),
       delete: () => createDummyQueryBuilder(),
       eq: () => createDummyQueryBuilder(),
-      neq: () => createDummyQueryBuilder(),
-      gt: () => createDummyQueryBuilder(),
-      gte: () => createDummyQueryBuilder(),
-      lt: () => createDummyQueryBuilder(),
-      lte: () => createDummyQueryBuilder(),
-      like: () => createDummyQueryBuilder(),
-      ilike: () => createDummyQueryBuilder(),
-      is: () => createDummyQueryBuilder(),
-      in: () => createDummyQueryBuilder(),
-      contains: () => createDummyQueryBuilder(),
-      containedBy: () => createDummyQueryBuilder(),
-      rangeGt: () => createDummyQueryBuilder(),
-      rangeGte: () => createDummyQueryBuilder(),
-      rangeLt: () => createDummyQueryBuilder(),
-      rangeLte: () => createDummyQueryBuilder(),
-      rangeAdjacent: () => createDummyQueryBuilder(),
-      overlaps: () => createDummyQueryBuilder(),
-      textSearch: () => createDummyQueryBuilder(),
-      match: () => createDummyQueryBuilder(),
-      not: () => createDummyQueryBuilder(),
-      or: () => createDummyQueryBuilder(),
-      filter: () => createDummyQueryBuilder(),
       order: () => createDummyQueryBuilder(),
       limit: () => createDummyQueryBuilder(),
-      range: () => createDummyQueryBuilder(),
-      abortSignal: () => createDummyQueryBuilder(),
-      single: () => Promise.resolve({ data: null, error: null }),
-      maybeSingle: () => Promise.resolve({ data: null, error: null }),
+      single: () => Promise.resolve({ data: null, error: { message: "Supabase not configured" } }),
       then: (resolve: any) => resolve({ data: [], error: null }),
     })
 
@@ -57,8 +30,32 @@ export const createClient = cache(() => {
         getSession: () => Promise.resolve({ data: { session: null }, error: null }),
       },
       from: () => createDummyQueryBuilder(),
-    }
+    } as any
   }
 
-  return createServerComponentClient({ cookies: () => cookieStore })
-})
+  return createServerClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value
+      },
+      set(name: string, value: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value, ...options })
+        } catch (error) {
+          // The `set` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
+      remove(name: string, options: CookieOptions) {
+        try {
+          cookieStore.set({ name, value: "", ...options })
+        } catch (error) {
+          // The `delete` method was called from a Server Component.
+          // This can be ignored if you have middleware refreshing
+          // user sessions.
+        }
+      },
+    },
+  })
+}

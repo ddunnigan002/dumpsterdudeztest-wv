@@ -108,7 +108,6 @@ export function ManagerSettings() {
 
       console.log("[v0] Manager Settings: Response status:", response.status)
 
-      // Check if the response is OK before trying to parse JSON
       if (response.ok) {
         const data = await response.json()
         console.log("[v0] Manager Settings: Response data:", data)
@@ -126,15 +125,16 @@ export function ManagerSettings() {
         fetchVehicles()
         alert("Vehicle added successfully!")
       } else {
-        // Try to parse error message from response if available
+        const contentType = response.headers.get("content-type")
         let errorMessage = "Unknown error"
-        try {
+
+        if (contentType?.includes("application/json")) {
           const errorData = await response.json()
           errorMessage = errorData.error || JSON.stringify(errorData)
-        } catch (jsonError) {
-          // If response is not JSON, use text
+        } else {
           errorMessage = await response.text()
         }
+
         console.error("[v0] Manager Settings: Failed to add vehicle:", response.status, errorMessage)
         alert(`Failed to add vehicle: ${errorMessage}`)
       }
