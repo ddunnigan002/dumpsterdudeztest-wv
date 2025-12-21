@@ -93,12 +93,10 @@ export default function EndDay({ vehicleId }: EndDayProps) {
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Check className="h-8 w-8 text-green-600" />
               </div>
-              <h2 className="text-xl font-semibold mb-2">Day Completed!</h2>
-              <p className="text-gray-600 mb-6">
-                End of day mileage has been recorded for {getVehicleDisplayName(vehicleId)}.
-              </p>
-              <Link href={`/vehicle/${vehicleId.toLowerCase()}`}>
-                <Button className="w-full">Return to Dashboard</Button>
+              <h2 className="text-xl font-semibold mb-2">Thank You!</h2>
+              <p className="text-gray-600 mb-6">Your end of day mileage has been recorded. Have a great evening!</p>
+              <Link href="/">
+                <Button className="w-full">Return to Home</Button>
               </Link>
             </CardContent>
           </Card>
