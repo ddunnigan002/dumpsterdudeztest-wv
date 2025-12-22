@@ -494,26 +494,29 @@ export function ManagerSettings() {
                 )}
 
                 {loading ? (
-                  <div className="text-center py-8 text-gray-500">Loading vehicles...</div>
+                  <div className="text-center py-8 text-muted-foreground">Loading vehicles...</div>
                 ) : (
                   <div className="space-y-4">
                     {vehicles.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">No vehicles found</div>
+                      <div className="text-center py-8 space-y-2">
+                        <p className="text-muted-foreground">No vehicles in your fleet yet</p>
+                        <p className="text-sm text-muted-foreground">Click "Add Vehicle" above to get started</p>
+                      </div>
                     ) : (
                       vehicles.map((vehicle) => (
-                        <Card key={vehicle.id} className="border-gray-200">
+                        <Card key={vehicle.id} className="border-border">
                           <CardContent className="p-4">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
-                                  <Truck className="h-5 w-5 text-orange-600" />
+                                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                                  <Truck className="h-5 w-5 text-primary" />
                                 </div>
                                 <div>
-                                  <h3 className="font-semibold text-gray-900">{vehicle.vehicle_number}</h3>
-                                  <p className="text-sm text-gray-600">
+                                  <h3 className="font-semibold text-foreground">{vehicle.vehicle_number}</h3>
+                                  <p className="text-sm text-muted-foreground">
                                     {vehicle.year} {vehicle.make} {vehicle.model}
                                   </p>
-                                  <div className="flex gap-4 text-sm text-gray-500">
+                                  <div className="flex gap-4 text-sm text-muted-foreground">
                                     {vehicle.license_plate && <span>Plate: {vehicle.license_plate}</span>}
                                     <span>Mileage: {vehicle.current_mileage?.toLocaleString() || 0}</span>
                                   </div>
@@ -523,6 +526,16 @@ export function ManagerSettings() {
                                 <Badge variant={vehicle.status === "active" ? "default" : "destructive"}>
                                   {vehicle.status || "active"}
                                 </Badge>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    // TODO: Implement edit functionality
+                                    alert("Edit vehicle functionality coming soon")
+                                  }}
+                                >
+                                  Edit
+                                </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"

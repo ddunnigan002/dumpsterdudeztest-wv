@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,7 +20,7 @@ interface ChecklistSummary {
   vehicle_number: string
   vehicle_make: string
   vehicle_model: string
-  checklist_date: string
+  checklist_date: string // "YYYY-MM-DD"
   overall_status: "pass" | "fail" | "pending"
   driver_name: string
   issues_count: number
@@ -35,10 +35,31 @@ interface ChecklistSummary {
 }
 
 interface DayData {
-  date: string
+  date: string // "YYYY-MM-DD"
   checklists: ChecklistSummary[]
   completionRate: number
   hasIssues: boolean
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0")
+}
+
+function toDateKeyLocal(date: Date) {
+  const y = date.getFullYear()
+  const m = pad2(date.getMonth() + 1)
+  const d = pad2(date.getDate())
+  return `${y}-${m}-${d}`
+}
+
+/**
+ * IMPORTANT:
+ * Never do new Date("YYYY-MM-DD") — it parses as UTC and causes day shifting in US timezones.
+ * This parses a "YYYY-MM-DD" key into a local Date safely.
+ */
+function parseDateKeyToLocalDate(dateKey: string) {
+  const [y, m, d] = dateKey.split("-").map(Number)
+  return new Date(y, m - 1, d)
 }
 
 export default function PreTripReports() {
@@ -51,18 +72,27 @@ export default function PreTripReports() {
   const [selectedChecklistType, setSelectedChecklistType] = useState<string>("All")
   const [vehicles, setVehicles] = useState<Array<{ id: string; vehicle_number: string }>>([])
 
+  const todayKey = useMemo(() => toDateKeyLocal(new Date()), [])
+
   useEffect(() => {
-    fetchReports()
-    fetchVehicles()
-  }, [currentDate])
+    void fetchVehicles()
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    void fetchReports()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentDate, selectedVehicle, selectedChecklistType])
 
   const fetchVehicles = async () => {
     try {
       const response = await fetch("/api/vehicles")
-      if (response.ok) {
-        const data = await response.json()
-        setVehicles(data.vehicles || [])
+      if (!response.ok) {
+        setVehicles([])
+        return
       }
+      const data = await response.json()
+      setVehicles(data.vehicles || [])
     } catch (error) {
       console.error("Error fetching vehicles:", error)
       setVehicles([])
@@ -71,80 +101,84 @@ export default function PreTripReports() {
 
   const fetchReports = async () => {
     try {
-      // Fetch reports for the current month
-      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+      // Local month bounds (avoid ISO/UTC shifting by building bounds from local parts)
+      const year = currentDate.getFullYear()
+      const month = currentDate.getMonth()
+
+      const startLocal = new Date(year, month, 1, 0, 0, 0, 0)
+      const endLocal = new Date(year, month + 1, 0, 23, 59, 59, 999)
 
       const response = await fetch(
-        `/api/pre-trip-reports?start=${startDate.toISOString()}&end=${endDate.toISOString()}`,
+        `/api/pre-trip-reports?start=${encodeURIComponent(startLocal.toISOString())}&end=${encodeURIComponent(
+          endLocal.toISOString(),
+        )}`,
       )
-      if (response.ok) {
-        const data = await response.json()
-        setReports(data.reports || [])
+
+      if (!response.ok) {
+        setReports([])
+        return
       }
+
+      const data = await response.json()
+      setReports(data.reports || [])
     } catch (error) {
       console.error("Error fetching reports:", error)
+      setReports([])
     } finally {
       setLoading(false)
     }
   }
 
-  const generateCalendarData = (): DayData[] => {
+  const filteredReports = useMemo(() => {
+    return reports.filter((report) => {
+      if (selectedVehicle !== "All" && report.vehicle_number !== selectedVehicle) return false
+      // For now, only Daily exists
+      if (selectedChecklistType !== "All" && selectedChecklistType !== "Daily") return false
+      return true
+    })
+  }, [reports, selectedVehicle, selectedChecklistType])
+
+  const calendarData: DayData[] = useMemo(() => {
     const year = currentDate.getFullYear()
     const month = currentDate.getMonth()
     const daysInMonth = new Date(year, month + 1, 0).getDate()
-    const calendarData: DayData[] = []
 
-    const filteredReports = reports.filter((report) => {
-      // Filter by vehicle
-      if (selectedVehicle !== "All" && report.vehicle_number !== selectedVehicle) {
-        return false
-      }
+    const expectedVehicleCount = selectedVehicle === "All" ? new Set(reports.map((r) => r.vehicle_number)).size || 1 : 1
 
-      // Filter by checklist type (for now, all existing reports are daily)
-      // This will be expanded when weekly/monthly data is available
-      if (selectedChecklistType !== "All" && selectedChecklistType !== "Daily") {
-        return false
-      }
-
-      return true
-    })
-
+    const list: DayData[] = []
     for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day).toISOString().split("T")[0]
-      const dayReports = filteredReports.filter((r) => r.checklist_date === date)
-
-      let expectedVehicleCount = 1
-      if (selectedVehicle === "All") {
-        expectedVehicleCount = new Set(reports.map((r) => r.vehicle_number)).size || 1
-      } else {
-        expectedVehicleCount = 1 // Only one vehicle when filtered
-      }
+      const dateKey = `${year}-${pad2(month + 1)}-${pad2(day)}`
+      const dayReports = filteredReports.filter((r) => r.checklist_date === dateKey)
 
       const completionRate = dayReports.length / expectedVehicleCount
       const hasIssues = dayReports.some((r) => r.overall_status === "fail" || r.issues_count > 0)
 
-      calendarData.push({
-        date,
+      list.push({
+        date: dateKey,
         checklists: dayReports,
         completionRate,
         hasIssues,
       })
     }
 
-    return calendarData
-  }
+    return list
+  }, [currentDate, filteredReports, reports, selectedVehicle])
 
-  const calendarData = generateCalendarData()
+  const monthLabel = useMemo(() => {
+    return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+  }, [currentDate])
+
+  const firstDayOfMonthOffset = useMemo(() => {
+    // This is safe because we construct the Date in local time.
+    return new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() // 0=Sun
+  }, [currentDate])
 
   const navigateMonth = (direction: "prev" | "next") => {
     const newDate = new Date(currentDate)
-    if (direction === "prev") {
-      newDate.setMonth(newDate.getMonth() - 1)
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1)
-    }
+    newDate.setMonth(newDate.getMonth() + (direction === "prev" ? -1 : 1))
     setCurrentDate(newDate)
+    setSelectedDay(null)
+    setViewMode("calendar")
   }
 
   const handleDayClick = (dayData: DayData) => {
@@ -163,16 +197,15 @@ export default function PreTripReports() {
     return value ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />
   }
 
+  // DETAILS VIEW
   if (viewMode === "details" && selectedDay) {
     const filteredDayChecklists = selectedDay.checklists.filter((checklist) => {
-      if (selectedVehicle !== "All" && checklist.vehicle_number !== selectedVehicle) {
-        return false
-      }
-      if (selectedChecklistType !== "All" && selectedChecklistType !== "Daily") {
-        return false
-      }
+      if (selectedVehicle !== "All" && checklist.vehicle_number !== selectedVehicle) return false
+      if (selectedChecklistType !== "All" && selectedChecklistType !== "Daily") return false
       return true
     })
+
+    const selectedDayLocal = parseDateKeyToLocalDate(selectedDay.date)
 
     return (
       <div className="space-y-6">
@@ -188,7 +221,7 @@ export default function PreTripReports() {
           </Button>
           <div>
             <h2 className="text-2xl font-bold text-gray-900">
-              {new Date(selectedDay.date).toLocaleDateString("en-US", {
+              {selectedDayLocal.toLocaleDateString("en-US", {
                 weekday: "long",
                 year: "numeric",
                 month: "long",
@@ -279,6 +312,7 @@ export default function PreTripReports() {
     )
   }
 
+  // CALENDAR VIEW
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -286,13 +320,12 @@ export default function PreTripReports() {
           <h2 className="text-2xl font-bold text-gray-900">Pre-Trip Inspection Calendar</h2>
           <p className="text-gray-600">Click on any day to view detailed inspection results</p>
         </div>
+
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => navigateMonth("prev")}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <span className="px-4 py-2 font-medium">
-            {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-          </span>
+          <span className="px-4 py-2 font-medium">{monthLabel}</span>
           <Button variant="outline" size="sm" onClick={() => navigateMonth("next")}>
             <ChevronRight className="h-4 w-4" />
           </Button>
@@ -304,7 +337,7 @@ export default function PreTripReports() {
           <div className="flex flex-wrap gap-4 items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">Vehicle:</span>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 <Button
                   variant={selectedVehicle === "All" ? "default" : "outline"}
                   size="sm"
@@ -326,9 +359,10 @@ export default function PreTripReports() {
                 ))}
               </div>
             </div>
+
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-700">Type:</span>
-              <div className="flex gap-1">
+              <div className="flex gap-1 flex-wrap">
                 {["All", "Daily", "Weekly", "Monthly"].map((type) => (
                   <Button
                     key={type}
@@ -354,24 +388,19 @@ export default function PreTripReports() {
             </div>
           ) : (
             <div className="grid grid-cols-7 gap-2">
-              {/* Day headers */}
               {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                 <div key={day} className="p-2 text-center font-medium text-gray-500 text-sm">
                   {day}
                 </div>
               ))}
 
-              {/* Empty cells for days before month starts */}
-              {Array.from({ length: new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay() }).map(
-                (_, i) => (
-                  <div key={`empty-${i}`} className="p-2"></div>
-                ),
-              )}
+              {Array.from({ length: firstDayOfMonthOffset }).map((_, i) => (
+                <div key={`empty-${i}`} className="p-2" />
+              ))}
 
-              {/* Calendar days */}
-              {calendarData.map((dayData, index) => {
-                const day = new Date(dayData.date).getDate()
-                const isToday = dayData.date === new Date().toISOString().split("T")[0]
+              {calendarData.map((dayData) => {
+                const dayNumber = parseDateKeyToLocalDate(dayData.date).getDate()
+                const isToday = dayData.date === todayKey
 
                 return (
                   <button
@@ -384,7 +413,8 @@ export default function PreTripReports() {
                       ${dayData.checklists.length > 0 ? "cursor-pointer" : "cursor-default"}
                     `}
                   >
-                    <div className="text-sm font-medium">{day}</div>
+                    <div className="text-sm font-medium">{dayNumber}</div>
+
                     {dayData.checklists.length > 0 && (
                       <div className="mt-1">
                         <div className="text-xs text-gray-600">
@@ -403,21 +433,21 @@ export default function PreTripReports() {
 
       <Card>
         <CardContent className="p-4">
-          <div className="flex items-center justify-center gap-6 text-sm">
+          <div className="flex items-center justify-center gap-6 text-sm flex-wrap">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-100 border border-green-300 rounded"></div>
+              <div className="w-4 h-4 bg-green-100 border border-green-300 rounded" />
               <span>All Good</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded"></div>
+              <div className="w-4 h-4 bg-yellow-100 border border-yellow-300 rounded" />
               <span>Incomplete</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
+              <div className="w-4 h-4 bg-red-100 border border-red-300 rounded" />
               <span>Issues Found</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-gray-100 rounded"></div>
+              <div className="w-4 h-4 bg-gray-100 rounded" />
               <span>No Data</span>
             </div>
           </div>

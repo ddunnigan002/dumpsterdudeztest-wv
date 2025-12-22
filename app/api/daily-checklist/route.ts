@@ -1,13 +1,67 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+export async function GET(request: NextRequest) {
+  try {
+    const supabase = createClient()
+    const { searchParams } = new URL(request.url)
+    const vehicleId = searchParams.get("vehicleId")
+    const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
+
+    if (!vehicleId) {
+      return NextResponse.json({ error: "Vehicle ID is required" }, { status: 400 })
+    }
+
+    // Check if vehicleId is a UUID or vehicle_number
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)
+
+    let actualVehicleId = vehicleId
+
+    if (!isUUID) {
+      // Look up vehicle by vehicle_number
+      const { data: vehicle, error: vehicleError } = await supabase
+        .from("vehicles")
+        .select("id")
+        .eq("vehicle_number", vehicleId.toUpperCase())
+        .maybeSingle()
+
+      if (vehicleError || !vehicle) {
+        return NextResponse.json({ completed: false }, { status: 200 })
+      }
+
+      actualVehicleId = vehicle.id
+    }
+
+    // Check if checklist exists for this vehicle and date
+    const { data, error } = await supabase
+      .from("daily_checklists")
+      .select("id, overall_status")
+      .eq("vehicle_id", actualVehicleId)
+      .eq("checklist_date", date)
+      .maybeSingle()
+
+    if (error) {
+      console.error("Error checking daily checklist:", error)
+      return NextResponse.json({ completed: false }, { status: 200 })
+    }
+
+    return NextResponse.json({
+      completed: !!data,
+      status: data?.overall_status || null,
+    })
+  } catch (error) {
+    console.error("Error in daily-checklist GET:", error)
+    return NextResponse.json({ completed: false }, { status: 200 })
+  }
+}
+
 export async function POST(request: NextRequest) {
   console.log("🔵 API: Daily checklist POST request received")
-  
+
   try {
     const supabase = createClient()
     console.log("🔵 API: Supabase client created")
-    
+
     let body
     try {
       body = await request.json()
@@ -48,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // Create or get a default system user instead of requiring authentication
     console.log("🔵 API: Using default system user (no login required)")
-    
+
     // Use a default user ID - you can change this to any UUID you want
     const defaultUserId = "8cd2bf7a-2442-4468-8131-d3d2764db3b1"
 
@@ -71,7 +125,7 @@ export async function POST(request: NextRequest) {
         : checklist.some((item: any) => item.status === "service_soon")
           ? "pending"
           : "pass",
-      notes: notes || null
+      notes: notes || null,
       // Removed checklist_items and photos columns - they don't exist in your table
     }
 
@@ -79,10 +133,10 @@ export async function POST(request: NextRequest) {
 
     // Only add database columns that exist and have corresponding frontend items
     const itemMapping = {
-      tires: 'tires_condition',
-      lights: 'lights_working', 
-      brakes: 'brakes_working',
-      fluids: 'fluid_levels_ok'
+      tires: "tires_condition",
+      lights: "lights_working",
+      brakes: "brakes_working",
+      fluids: "fluid_levels_ok",
     }
 
     // Map only the items that exist in your frontend
@@ -114,21 +168,27 @@ export async function POST(request: NextRequest) {
     if (error) {
       console.error("❌ API: Database error:", error)
       console.error("❌ API: Error details:", JSON.stringify(error, null, 2))
-      return NextResponse.json({ 
-        error: "Failed to save checklist", 
-        details: error.message,
-        hint: error.hint 
-      }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to save checklist",
+          details: error.message,
+          hint: error.hint,
+        },
+        { status: 500 },
+      )
     }
 
     console.log("✅ API: Checklist saved successfully!")
     return NextResponse.json({ success: true, data })
   } catch (error) {
     console.error("❌ API: Unexpected error:", error)
-    console.error("❌ API: Error stack:", error instanceof Error ? error.stack : 'No stack trace')
-    return NextResponse.json({ 
-      error: "Internal server error", 
-      details: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error("❌ API: Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

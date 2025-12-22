@@ -44,12 +44,45 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
   const [monthlyDueDate, setMonthlyDueDate] = useState<string>("")
   const [showEndDayReminder, setShowEndDayReminder] = useState(false)
   const [yesterdayDate, setYesterdayDate] = useState<string>("")
+  const [preTripCompleted, setPreTripCompleted] = useState(false)
+  const [endDayCompleted, setEndDayCompleted] = useState(false)
 
   useEffect(() => {
     fetchMaintenanceAlerts()
     fetchChecklistDueDates()
     checkEndDayStatus()
+    checkDailyTaskCompletion()
   }, [vehicleId])
+
+  const getLocalDateKey = () => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+  }
+
+  const checkDailyTaskCompletion = async () => {
+    try {
+      const today = getLocalDateKey()
+
+      // Check pre-trip completion
+      const preTripRes = await fetch(`/api/daily-checklist?vehicleId=${vehicleId}&date=${today}`)
+
+      if (preTripRes.ok) {
+        const data = await preTripRes.json()
+        const isCompleted = data.completed || data.checklistCompleted || false
+        setPreTripCompleted(isCompleted)
+      }
+
+      const endDayRes = await fetch(`/api/check-end-day?vehicleId=${vehicleId}&date=${today}`)
+
+      if (endDayRes.ok) {
+        const data = await endDayRes.json()
+        const isCompleted = data.completed === true
+        setEndDayCompleted(isCompleted)
+      }
+    } catch (error) {
+      console.error("Error checking daily task completion:", error)
+    }
+  }
 
   const checkEndDayStatus = async () => {
     try {
@@ -258,9 +291,17 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
           </CardHeader>
           <CardContent className="space-y-3">
             <Link href={`/vehicle/${vehicleId}/pre-trip`} className="block">
-              <Button className="w-full h-14 text-base font-medium bg-primary hover:bg-primary/90" size="lg">
+              <Button
+                className={`w-full h-14 text-base font-medium ${
+                  preTripCompleted
+                    ? "bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed"
+                    : "bg-primary hover:bg-primary/90"
+                }`}
+                size="lg"
+                disabled={preTripCompleted}
+              >
                 <CheckSquare className="mr-3 h-5 w-5" />
-                Daily Pre-Trip Checklist
+                <span className={preTripCompleted ? "line-through" : ""}>Daily Pre-Trip Checklist</span>
               </Button>
             </Link>
 
@@ -272,9 +313,17 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
             </Link>
 
             <Link href={`/vehicle/${vehicleId}/end-day`} className="block">
-              <Button className="w-full h-14 text-base font-medium bg-primary hover:bg-primary/90" size="lg">
+              <Button
+                className={`w-full h-14 text-base font-medium ${
+                  endDayCompleted
+                    ? "bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed"
+                    : "bg-primary hover:bg-primary/90"
+                }`}
+                size="lg"
+                disabled={endDayCompleted}
+              >
                 <Clock className="mr-3 h-5 w-5" />
-                End Day
+                <span className={endDayCompleted ? "line-through" : ""}>End Day</span>
               </Button>
             </Link>
           </CardContent>

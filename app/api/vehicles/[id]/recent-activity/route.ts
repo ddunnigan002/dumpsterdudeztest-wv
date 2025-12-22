@@ -11,7 +11,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       .from("vehicles")
       .select("id")
       .eq("vehicle_number", vehicleId.toUpperCase())
-      .single()
+      .maybeSingle()
 
     if (vehicleError || !vehicle) {
       return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Get recent daily checklists
     const { data: checklists } = await supabase
       .from("daily_checklists")
-      .select("*, users(full_name)")
+      .select("*")
       .eq("vehicle_id", vehicle.id)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -33,7 +33,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           id: `checklist-${checklist.id}`,
           type: "Daily Checklist",
           created_at: checklist.created_at,
-          driver_name: checklist.users?.full_name,
+          driver_name: checklist.driver_name || "Unknown",
           details: `Checklist completed`,
         })
       })
@@ -42,7 +42,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Get recent daily logs
     const { data: logs } = await supabase
       .from("daily_logs")
-      .select("*, users(full_name)")
+      .select("*")
       .eq("vehicle_id", vehicle.id)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           id: `log-${log.id}`,
           type: "Daily Log",
           created_at: log.created_at,
-          driver_name: log.users?.full_name,
+          driver_name: log.driver_name || "Unknown",
           details: `${miles} miles driven${log.fuel_gallons ? `, ${log.fuel_gallons} gallons fuel` : ""}`,
         })
       })
@@ -63,7 +63,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     // Get recent issues
     const { data: issues } = await supabase
       .from("vehicle_issues")
-      .select("*, users(full_name)")
+      .select("*")
       .eq("vehicle_id", vehicle.id)
       .order("created_at", { ascending: false })
       .limit(5)
@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           id: `issue-${issue.id}`,
           type: "Issue Report",
           created_at: issue.created_at,
-          driver_name: issue.users?.full_name,
+          driver_name: issue.driver_name || "Unknown",
           details: issue.description,
         })
       })

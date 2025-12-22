@@ -1,11 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+const getLocalDateKey = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const vehicleId = searchParams.get("vehicleId")
+    const dateParam = searchParams.get("date")
 
     if (!vehicleId) {
       return NextResponse.json({ error: "Vehicle ID required" }, { status: 400 })
@@ -25,16 +31,33 @@ export async function GET(request: NextRequest) {
         .maybeSingle()
 
       if (vehicleError || !vehicle) {
-        return NextResponse.json({ needsEndDay: false })
+        return NextResponse.json({ needsEndDay: false, completed: false })
       }
 
       actualVehicleId = vehicle.id
     }
 
-    // Get yesterday's date
+    if (dateParam) {
+      const { data, error } = await supabase
+        .from("daily_logs")
+        .select("*")
+        .eq("vehicle_id", actualVehicleId)
+        .eq("log_date", dateParam)
+        .maybeSingle()
+
+      if (error) {
+        console.error("[v0] Error checking end day completion:", error)
+        return NextResponse.json({ completed: false })
+      }
+
+      return NextResponse.json({
+        completed: !!data,
+      })
+    }
+
     const yesterday = new Date()
     yesterday.setDate(yesterday.getDate() - 1)
-    const yesterdayStr = yesterday.toISOString().split("T")[0]
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`
 
     const { data, error } = await supabase
       .from("daily_logs")
