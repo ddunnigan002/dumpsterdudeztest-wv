@@ -11,8 +11,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const { data: vehicle, error: vehicleError } = await supabase
       .from("vehicles")
       .select("id, current_mileage")
-      .eq("vehicle_number", vehicleId.toUpperCase())
-      .single()
+      .ilike("vehicle_number", vehicleId)
+      .maybeSingle()
 
     console.log("[v0] Maintenance API: Vehicle lookup result:", { vehicle, vehicleError })
 

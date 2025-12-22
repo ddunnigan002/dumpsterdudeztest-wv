@@ -18,11 +18,10 @@ export async function GET(request: NextRequest) {
     let actualVehicleId = vehicleId
 
     if (!isUUID) {
-      // Look up vehicle by vehicle_number
       const { data: vehicle, error: vehicleError } = await supabase
         .from("vehicles")
         .select("id")
-        .eq("vehicle_number", vehicleId.toUpperCase())
+        .ilike("vehicle_number", vehicleId)
         .maybeSingle()
 
       if (vehicleError || !vehicle) {
@@ -86,12 +85,12 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Looking for vehicle with number:", vehicleNumber.toUpperCase())
 
-    // Find vehicle by vehicle_number
+    // Find vehicle by vehicle_number (case-insensitive)
     const { data: vehicle, error: vehicleError } = await supabase
       .from("vehicles")
       .select("id")
-      .eq("vehicle_number", vehicleNumber.toUpperCase())
-      .single()
+      .ilike("vehicle_number", `%${vehicleNumber.toUpperCase()}%`)
+      .maybeSingle()
 
     console.log("🔵 API: Vehicle query result:", { vehicle, vehicleError })
 

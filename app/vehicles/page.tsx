@@ -97,6 +97,13 @@ setVehicles(vehiclesArray)
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
+                    <Label>Truck Name / Vehicle #</Label>
+                    <Input
+                      value={editData.vehicle_number || ""}
+                      onChange={(e) => setEditData({ ...editData, vehicle_number: e.target.value })}
+                    />
+                  </div>
+                    <div>
                       <Label>Make</Label>
                       <Input
                         value={editData.make || ""}
