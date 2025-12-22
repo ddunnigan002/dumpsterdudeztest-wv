@@ -34,7 +34,8 @@ export default function VehiclesPage() {
       const response = await fetch("/api/vehicles")
       if (response.ok) {
         const data = await response.json()
-        setVehicles(Array.isArray(data) ? data : [])
+        const vehiclesArray = Array.isArray(data?.vehicles) ? data.vehicles : Array.isArray(data) ? data : []
+setVehicles(vehiclesArray)          
       } else {
         setVehicles([])
       }
