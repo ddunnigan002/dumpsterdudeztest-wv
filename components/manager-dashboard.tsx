@@ -169,7 +169,7 @@ const ManagerDashboard = () => {
                         <Card
                           key={vehicle.id}
                           className="cursor-pointer hover:shadow-md transition-shadow border-border hover:border-primary"
-                          onClick={() => router.push(`/manager/vehicle/${vehicle.vehicle_number}`)}
+                          onClick={() => router.push(`/manager/vehicle/${vehicle.id}`)}
                         >
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">

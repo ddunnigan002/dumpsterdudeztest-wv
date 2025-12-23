@@ -312,7 +312,7 @@ export function ManagerSettings() {
     }
   }
 
-  const deleteChecklistItem = async (itemId: string, type: string) => {
+  const deleteChecklistItem = async (itemId: string) => {
     try {
       const response = await fetch(`/api/checklist-items?id=${itemId}`, {
         method: "DELETE",
@@ -734,55 +734,92 @@ export function ManagerSettings() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Checklist Items Management</CardTitle>
-                <CardDescription>Add, edit, or remove items from daily, weekly, and monthly checklists</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                {["daily", "weekly", "monthly"].map((type) => (
+           <Card>
+            <CardHeader>
+              <CardTitle>Checklist Items Management</CardTitle>
+              <CardDescription>
+                Add, edit, or remove custom items from daily, weekly, and monthly checklists. Core items are fixed and cannot be edited here.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              {(["daily", "weekly", "monthly"] as const).map((type) => {
+                const items = checklistItems[type] || []
+
+                return (
                   <div key={type} className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="font-medium capitalize">{type} Checklist Items</h3>
-                      <Button size="sm" variant="outline" onClick={() => setShowAddItem({ type, label: "", name: "" })}>
+
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowAddItem({ type, label: "", name: "" })}
+                      >
                         <Plus className="h-4 w-4 mr-2" />
-                        Add Item
+                        Add Custom Item
                       </Button>
                     </div>
 
+                    {/* Add Item UI */}
                     {showAddItem.type === type && (
-                      <Card className="p-4 bg-orange-50">
+                      <Card className="p-4 bg-orange-50 border-orange-200">
                         <div className="space-y-3">
                           <div>
                             <Label htmlFor={`label-${type}`}>Item Label</Label>
                             <Input
                               id={`label-${type}`}
-                              placeholder="e.g., Check Engine Oil"
+                              placeholder="e.g., Check tarp straps"
                               value={showAddItem.label}
-                              onChange={(e) =>
+                              onChange={(e) => {
+                                const label = e.target.value
+                                // Auto-generate internal name from label
+                                const generatedName = label
+                                  .toLowerCase()
+                                  .trim()
+                                  .replace(/[^a-z0-9]+/g, "_")
+                                  .replace(/^_+|_+$/g, "")
+                                  .slice(0, 40)
+
                                 setShowAddItem((prev) => ({
                                   ...prev,
-                                  label: e.target.value,
+                                  label,
+                                  name: generatedName ? `custom_${generatedName}` : "",
                                 }))
-                              }
+                              }}
                             />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              This is what drivers will see.
+                            </p>
                           </div>
+
                           <div>
-                            <Label htmlFor={`name-${type}`}>Internal Name (no spaces)</Label>
+                            <Label htmlFor={`name-${type}`}>Internal Name</Label>
                             <Input
                               id={`name-${type}`}
-                              placeholder="e.g., check_engine_oil"
+                              placeholder="custom_check_tarp_straps"
                               value={showAddItem.name}
                               onChange={(e) =>
                                 setShowAddItem((prev) => ({
                                   ...prev,
-                                  name: e.target.value.toLowerCase().replace(/\s+/g, "_"),
+                                  name: e.target.value
+                                    .toLowerCase()
+                                    .trim()
+                                    .replace(/[^a-z0-9_]+/g, "_"),
                                 }))
                               }
                             />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Saved as a template item. It won’t change your core checklist columns.
+                            </p>
                           </div>
+
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={addChecklistItem}>
+                            <Button
+                              size="sm"
+                              onClick={addChecklistItem}
+                              disabled={!showAddItem.label || !showAddItem.name}
+                            >
                               Save Item
                             </Button>
                             <Button
@@ -797,87 +834,129 @@ export function ManagerSettings() {
                       </Card>
                     )}
 
-                    <div className="space-y-2">
-                      {checklistItems[type as keyof typeof checklistItems].map((item: any) => (
-                        <div key={item.id}>
-                          {editingItem.id === item.id ? (
-                            <Card className="p-4 bg-blue-50">
-                              <div className="space-y-3">
-                                <div>
-                                  <Label>Item Label</Label>
-                                  <Input
-                                    placeholder="e.g., Check Engine Oil"
-                                    value={editingItem.label}
-                                    onChange={(e) =>
-                                      setEditingItem((prev) => ({
-                                        ...prev,
-                                        label: e.target.value,
-                                      }))
-                                    }
-                                  />
+                    {/* Empty state */}
+                    {items.length === 0 ? (
+                      <div className="text-sm text-muted-foreground border rounded-lg p-4 bg-white">
+                        No custom {type} items yet. Click <span className="font-medium">Add Custom Item</span> to create one.
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {items.map((item: any) => {
+                          // Treat anything that doesn't start with custom_ as "core"
+                          const isCore = typeof item.item_name === "string" && !item.item_name.startsWith("custom_")
+
+                          return (
+                            <div key={item.id}>
+                              {editingItem.id === item.id ? (
+                                <Card className="p-4 bg-blue-50 border-blue-200">
+                                  <div className="space-y-3">
+                                    <div>
+                                      <Label>Item Label</Label>
+                                      <Input
+                                        placeholder="e.g., Check tarp straps"
+                                        value={editingItem.label}
+                                        onChange={(e) =>
+                                          setEditingItem((prev) => ({ ...prev, label: e.target.value }))
+                                        }
+                                        disabled={isCore}
+                                      />
+                                    </div>
+
+                                    <div>
+                                      <Label>Internal Name</Label>
+                                      <Input
+                                        placeholder="custom_check_tarp_straps"
+                                        value={editingItem.name}
+                                        onChange={(e) =>
+                                          setEditingItem((prev) => ({
+                                            ...prev,
+                                            name: e.target.value
+                                              .toLowerCase()
+                                              .trim()
+                                              .replace(/[^a-z0-9_]+/g, "_"),
+                                          }))
+                                        }
+                                        disabled={isCore}
+                                      />
+                                    </div>
+
+                                    {isCore ? (
+                                      <div className="text-sm text-muted-foreground">
+                                        This is a core item and can’t be edited here.
+                                      </div>
+                                    ) : (
+                                      <div className="flex gap-2">
+                                        <Button size="sm" onClick={updateChecklistItem}>
+                                          Save Changes
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() =>
+                                            setEditingItem({ id: null, type: null, label: "", name: "" })
+                                          }
+                                        >
+                                          Cancel
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </Card>
+                              ) : (
+                                <div className="flex items-center justify-between p-3 border rounded-lg bg-white">
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <p className="font-medium">{item.item_label}</p>
+                                      {isCore ? (
+                                        <Badge variant="secondary">Core</Badge>
+                                      ) : (
+                                        <Badge variant="default">Custom</Badge>
+                                      )}
+                                    </div>
+                                    <p className="text-sm text-muted-foreground">{item.item_name}</p>
+                                  </div>
+
+                                  <div className="flex gap-2">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() =>
+                                        setEditingItem({
+                                          id: item.id,
+                                          type,
+                                          label: item.item_label,
+                                          name: item.item_name,
+                                        })
+                                      }
+                                      disabled={isCore}
+                                      title={isCore ? "Core items cannot be edited here" : "Edit"}
+                                    >
+                                      <Pencil className="h-4 w-4 text-primary" />
+                                    </Button>
+
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => deleteChecklistItem(item.id, type)}
+                                      disabled={isCore}
+                                      title={isCore ? "Core items cannot be removed here" : "Remove"}
+                                    >
+                                      <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
+                                  </div>
                                 </div>
-                                <div>
-                                  <Label>Internal Name (no spaces)</Label>
-                                  <Input
-                                    placeholder="e.g., check_engine_oil"
-                                    value={editingItem.name}
-                                    onChange={(e) =>
-                                      setEditingItem((prev) => ({
-                                        ...prev,
-                                        name: e.target.value.toLowerCase().replace(/\s+/g, "_"),
-                                      }))
-                                    }
-                                  />
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button size="sm" onClick={updateChecklistItem}>
-                                    Save Changes
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => setEditingItem({ id: null, type: null, label: "", name: "" })}
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            </Card>
-                          ) : (
-                            <div className="flex items-center justify-between p-3 border rounded-lg bg-white">
-                              <div>
-                                <p className="font-medium">{item.item_label}</p>
-                                <p className="text-sm text-muted-foreground">{item.item_name}</p>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    setEditingItem({
-                                      id: item.id,
-                                      type,
-                                      label: item.item_label,
-                                      name: item.item_name,
-                                    })
-                                  }
-                                >
-                                  <Pencil className="h-4 w-4 text-primary" />
-                                </Button>
-                                <Button size="sm" variant="ghost" onClick={() => deleteChecklistItem(item.id, type)}>
-                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                              </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                )
+              })}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
           {/* Company Settings Tab */}
           <TabsContent value="company" className="space-y-6">
