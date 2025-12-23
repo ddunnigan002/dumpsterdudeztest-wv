@@ -20,14 +20,15 @@ export async function GET(request: NextRequest) {
     let actualVehicleId = vehicleId
 
     // Check if vehicleId is a UUID (has dashes) or a vehicle_number
-    const isUUID = vehicleId.includes("-")
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleId)
+
 
     if (!isUUID) {
       // Look up vehicle by vehicle_number
       const { data: vehicle, error: vehicleError } = await supabase
         .from("vehicles")
         .select("id")
-        .eq("vehicle_number", vehicleId)
+        .ilike("vehicle_number", vehicleId)
         .maybeSingle()
 
       if (vehicleError || !vehicle) {
