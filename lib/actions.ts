@@ -1,34 +1,25 @@
 "use server"
 
-import { createServerActionClient } from "@supabase/auth-helpers-nextjs"
-import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
+import { createClient } from "@/lib/supabase/server"
 
 export async function signIn(prevState: any, formData: FormData) {
-  if (!formData) {
-    return { error: "Form data is missing" }
-  }
+  if (!formData) return { error: "Form data is missing" }
 
-  const email = formData.get("email")
-  const password = formData.get("password")
+  const email = formData.get("email")?.toString().trim()
+  const password = formData.get("password")?.toString()
 
-  if (!email || !password) {
-    return { error: "Email and password are required" }
-  }
+  if (!email || !password) return { error: "Email and password are required" }
 
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const supabase = createClient()
 
   try {
     const { error } = await supabase.auth.signInWithPassword({
-      email: email.toString(),
-      password: password.toString(),
+      email,
+      password,
     })
 
-    if (error) {
-      return { error: error.message }
-    }
-
+    if (error) return { error: error.message }
     return { success: true }
   } catch (error) {
     console.error("Login error:", error)
@@ -37,93 +28,97 @@ export async function signIn(prevState: any, formData: FormData) {
 }
 
 export async function signUpWithProfile(prevState: any, formData: FormData) {
-  if (!formData) {
-    return { error: "Form data is missing" }
-  }
+  if (!formData) return { error: "Form data is missing" }
 
-  const email = formData.get("email")
-  const password = formData.get("password")
-  const fullName = formData.get("fullName")
-  const franchiseName = formData.get("franchiseName")
-  const phone = formData.get("phone")
-  const role = formData.get("role")
+  const email = formData.get("email")?.toString().trim()
+  const password = formData.get("password")?.toString()
+  const fullName = formData.get("fullName")?.toString().trim()
+  const franchiseName = formData.get("franchiseName")?.toString().trim()
+  const phone = formData.get("phone")?.toString().trim() || null
+  const role = formData.get("role")?.toString().trim()
 
-  // Validate required fields
   if (!email || !password || !fullName || !franchiseName || !role) {
     return { error: "All required fields must be filled" }
   }
 
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  // Recommended for now: only owners self-sign up
+  if (role !== "owner") {
+    return { error: "Only franchise owners can create accounts right now. Please contact your admin." }
+  }
+
+  const supabase = createClient()
 
   try {
-    // Sign up the user
+    // 1) Create auth user
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: email.toString(),
-      password: password.toString(),
+      email,
+      password,
       options: {
+        data: { full_name: fullName },
         emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || "http://localhost:3000",
       },
     })
 
-    if (authError) {
-      return { error: authError.message }
-    }
+    if (authError) return { error: authError.message }
+    const user = authData.user
+    if (!user) return { error: "Signup failed: no user returned from Supabase." }
 
-    if (authData.user) {
-      // Create franchise first (for owners) or find existing franchise
-      let franchiseId = null
-
-      if (role === "owner") {
-        const { data: franchise, error: franchiseError } = await supabase
-          .from("franchises")
-          .insert({
-            name: franchiseName.toString(),
-            owner_email: email.toString(),
-            phone: phone?.toString() || null,
-          })
-          .select()
-          .single()
-
-        if (franchiseError) {
-          console.error("Franchise creation error:", franchiseError)
-          return { error: "Failed to create franchise. Please try again." }
-        }
-
-        franchiseId = franchise.id
-      } else {
-        // For non-owners, they need to be invited to an existing franchise
-        // For now, we'll use the sample franchise
-        const { data: franchise } = await supabase
-          .from("franchises")
-          .select("id")
-          .eq("name", "Dumpster Dudez - Main Location")
-          .single()
-
-        franchiseId = franchise?.id
-      }
-
-      if (!franchiseId) {
-        return { error: "No franchise found. Please contact your franchise owner." }
-      }
-
-      // Create user profile
-      const { error: profileError } = await supabase.from("users").insert({
-        id: authData.user.id,
-        franchise_id: franchiseId,
-        email: email.toString(),
-        full_name: fullName.toString(),
-        role: role.toString(),
-        phone: phone?.toString() || null,
+    // 2) Create franchise
+    const { data: franchise, error: franchiseError } = await supabase
+      .from("franchises")
+      .insert({
+        name: franchiseName,
+        owner_email: email,
+        phone,
       })
+      .select("id")
+      .single()
 
-      if (profileError) {
-        console.error("Profile creation error:", profileError)
-        return { error: "Failed to create user profile. Please try again." }
+    if (franchiseError) {
+      console.error("Franchise creation error:", franchiseError)
+      return { error: "Failed to create franchise. Please try again." }
+    }
+
+    const franchiseId = franchise?.id
+    if (!franchiseId) return { error: "Failed to create franchise. Please try again." }
+
+    // 3) Ensure profile exists (trigger should do it; we upsert/update to be safe)
+    const { error: profileUpsertError } = await supabase.from("profiles").upsert(
+      {
+        id: user.id,
+        email,
+        full_name: fullName,
+        phone,
+      },
+      { onConflict: "id" }
+    )
+
+    if (profileUpsertError) {
+      const { error: profileUpdateError } = await supabase
+        .from("profiles")
+        .update({ email, full_name: fullName, phone })
+        .eq("id", user.id)
+
+      if (profileUpdateError) {
+        console.error("Profile upsert/update error:", profileUpsertError, profileUpdateError)
+        return { error: "Account created, but failed to save profile info." }
       }
     }
 
-    return { success: "Account created! Check your email to confirm your account." }
+    // 4) Create membership (owner bootstrap)
+    const { error: membershipError } = await supabase.from("franchise_memberships").insert({
+      user_id: user.id,
+      franchise_id: franchiseId,
+      role: "owner",
+      is_active: true,
+    })
+
+    if (membershipError) {
+      console.error("Membership creation error:", membershipError)
+      return { error: "Account created, but failed to link you to the franchise. Please contact support." }
+    }
+
+    return { success: "Account created! You can now log in with your email and password." }
   } catch (error) {
     console.error("Sign up error:", error)
     return { error: "An unexpected error occurred. Please try again." }
@@ -131,36 +126,26 @@ export async function signUpWithProfile(prevState: any, formData: FormData) {
 }
 
 export async function signUp(prevState: any, formData: FormData) {
-  // Check if formData is valid
-  if (!formData) {
-    return { error: "Form data is missing" }
-  }
+  if (!formData) return { error: "Form data is missing" }
 
-  const email = formData.get("email")
-  const password = formData.get("password")
+  const email = formData.get("email")?.toString().trim()
+  const password = formData.get("password")?.toString()
 
-  // Validate required fields
-  if (!email || !password) {
-    return { error: "Email and password are required" }
-  }
+  if (!email || !password) return { error: "Email and password are required" }
 
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
+  const supabase = createClient()
 
   try {
     const { error } = await supabase.auth.signUp({
-      email: email.toString(),
-      password: password.toString(),
+      email,
+      password,
       options: {
         emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL || "http://localhost:3000",
       },
     })
 
-    if (error) {
-      return { error: error.message }
-    }
-
-    return { success: "Check your email to confirm your account." }
+    if (error) return { error: error.message }
+    return { success: "Account created! You can now log in with your email and password." }
   } catch (error) {
     console.error("Sign up error:", error)
     return { error: "An unexpected error occurred. Please try again." }
@@ -168,9 +153,7 @@ export async function signUp(prevState: any, formData: FormData) {
 }
 
 export async function signOut() {
-  const cookieStore = cookies()
-  const supabase = createServerActionClient({ cookies: () => cookieStore })
-
+  const supabase = createClient()
   await supabase.auth.signOut()
   redirect("/auth/login")
 }

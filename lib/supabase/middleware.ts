@@ -1,60 +1,63 @@
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
+import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
-// Check if Supabase environment variables are available
-export const isSupabaseConfigured = (() => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY
-
-  return (
-    typeof supabaseUrl === "string" &&
-    supabaseUrl.length > 0 &&
-    typeof supabaseAnonKey === "string" &&
-    supabaseAnonKey.length > 0
-  )
-})()
-
-// Remove all session/user checks and redirects
-export async function updateSession(request: NextRequest) {
-  // No-op: authentication entirely disabled
-  return NextResponse.next();
+function isConfigured() {
+  return !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 }
 
-  const res = NextResponse.next()
+export async function updateSession(request: NextRequest) {
+  // If env vars aren't set, don't block the app (useful for previews).
+  if (!isConfigured()) return NextResponse.next()
 
-  // Create a Supabase client configured to use cookies
-  const supabase = createMiddlewareClient({ req: request, res })
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
-  // Check if this is an auth callback
-  const requestUrl = new URL(request.url)
-  const code = requestUrl.searchParams.get("code")
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll()
+        },
+        setAll(cookiesToSet) {
+          // Apply auth cookie updates to both the request and the response.
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value)
+            response.cookies.set(name, value, options)
+          })
+        },
+      },
+    }
+  )
 
-  if (code) {
-    // Exchange the code for a session
-    await supabase.auth.exchangeCodeForSession(code)
-    // Redirect to home page after successful auth
-    return NextResponse.redirect(new URL("/", request.url))
-  }
-
-  // Refresh session if expired - required for Server Components
+  // Refresh session if needed
   await supabase.auth.getSession()
 
-  // Protected routes - redirect to login if not authenticated
-  const isAuthRoute =
-    request.nextUrl.pathname.startsWith("/auth/login") ||
-    request.nextUrl.pathname.startsWith("/auth/sign-up") ||
-    request.nextUrl.pathname === "/auth/callback"
+  const pathname = request.nextUrl.pathname
 
-  if (!isAuthRoute) {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+  // Allow auth pages + static assets
+  const isAuthRoute = pathname.startsWith("/auth/")
+  const isStatic =
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    /\.(?:svg|png|jpg|jpeg|gif|webp)$/.test(pathname)
 
-    if (!session) {
-      const redirectUrl = new URL("/auth/login", request.url)
-      return NextResponse.redirect(redirectUrl)
-    }
+  if (isAuthRoute || isStatic) return response
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    const url = request.nextUrl.clone()
+    url.pathname = "/auth/login"
+    url.searchParams.set("redirect", pathname)
+    return NextResponse.redirect(url)
   }
 
-  return res
+  return response
 }

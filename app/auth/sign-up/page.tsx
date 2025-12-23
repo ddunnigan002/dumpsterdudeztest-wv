@@ -1,21 +1,20 @@
-"use client"
+import { redirect } from "next/navigation"
+import SignUpForm from "@/components/sign-up-form"
+import { createClient } from "@/lib/supabase/server"
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+export default async function SignUpPage() {
+  const supabase = createClient()
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
 
-export default function SignUpPage() {
-  const router = useRouter()
-
-  useEffect(() => {
-    router.push("/")
-  }, [router])
+  if (session) {
+    redirect("/")
+  }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-orange-400 to-orange-600">
-      <div className="text-white text-center">
-        <h1 className="text-2xl font-bold mb-4">Redirecting...</h1>
-        <p>Taking you to the fleet dashboard</p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-400 to-orange-600 p-4">
+      <SignUpForm />
     </div>
   )
 }
