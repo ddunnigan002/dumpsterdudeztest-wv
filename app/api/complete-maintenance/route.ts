@@ -1,29 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function POST(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
-    const { vehicleId, maintenanceType, alertId, completedBy, completedDate } = await request.json()
+    const { vehicleId, maintenanceType, alertId, completedDate } = await request.json()
 
-    // Get vehicle UUID from vehicle number
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", vehicleId)
-      .single()
-
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     // Mark scheduled maintenance as completed
-    const { error: updateError } = await supabase
+    const { error: updateError } = await ctx.supabase
       .from("scheduled_maintenance")
       .update({
         status: "completed",
         completed_date: completedDate,
-        completed_by: completedBy,
+        completed_by: ctx.user.id, // Use authenticated user instead of completedBy parameter
       })
       .eq("id", alertId)
 
@@ -31,7 +34,7 @@ export async function POST(request: NextRequest) {
       console.error("Error updating scheduled maintenance:", updateError)
     }
 
-    const { data: existingRecord, error: checkError } = await supabase
+    const { data: existingRecord, error: checkError } = await ctx.supabase
       .from("maintenance_records")
       .select("id, cost")
       .eq("vehicle_id", vehicle.id)
@@ -44,12 +47,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingRecord) {
-      // Update existing record to mark as completed
-      const { error: updateRecordError } = await supabase
+      const { error: updateRecordError } = await ctx.supabase
         .from("maintenance_records")
         .update({
           status: "completed",
-          performed_by: completedBy,
+          performed_by: ctx.user.id,
         })
         .eq("id", existingRecord.id)
 
@@ -58,14 +60,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Failed to update maintenance record" }, { status: 500 })
       }
     } else {
-      // Create a new maintenance record placeholder that can be updated with cost later
-      const { error: insertError } = await supabase.from("maintenance_records").insert({
+      const { error: insertError } = await ctx.supabase.from("maintenance_records").insert({
         vehicle_id: vehicle.id,
+        franchise_id: ctx.franchiseId,
         maintenance_type: maintenanceType,
         date_performed: completedDate,
-        performed_by: completedBy,
+        performed_by: ctx.user.id,
         description: `${maintenanceType} completed via dashboard`,
-        cost: 0, // Placeholder - will be updated when cost is entered
+        cost: 0,
         status: "completed",
         service_provider: "Pending cost entry",
       })

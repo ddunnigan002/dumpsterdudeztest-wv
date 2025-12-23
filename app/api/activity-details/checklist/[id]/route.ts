@@ -1,16 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getActiveFranchiseContext, isContextError, contextErrorResponse } from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
     const checklistId = params.id
 
-    // Get checklist details with items
-    const { data: checklist, error } = await supabase
+    const { data: checklist, error } = await ctx.supabase
       .from("daily_checklists")
-      .select("*, users(full_name)")
+      .select("*, users(full_name), vehicles!inner(franchise_id)")
       .eq("id", checklistId)
+      .eq("vehicles.franchise_id", ctx.franchiseId)
       .single()
 
     if (error || !checklist) {

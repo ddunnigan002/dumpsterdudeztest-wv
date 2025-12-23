@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 const getLocalDateKey = () => {
   const d = new Date()
@@ -7,8 +12,13 @@ const getLocalDateKey = () => {
 }
 
 export async function GET(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
+    const supabase = ctx.supabase
     const { searchParams } = new URL(request.url)
     const vehicleId = searchParams.get("vehicleId")
     const dateParam = searchParams.get("date")
@@ -17,32 +27,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Vehicle ID required" }, { status: 400 })
     }
 
-    let actualVehicleId = vehicleId
-
-    // Check if vehicleId is a UUID (has dashes) or a vehicle_number
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleId)
-
-
-    if (!isUUID) {
-      // Look up vehicle by vehicle_number
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from("vehicles")
-        .select("id")
-        .ilike("vehicle_number", vehicleId)
-        .maybeSingle()
-
-      if (vehicleError || !vehicle) {
-        return NextResponse.json({ needsEndDay: false, completed: false })
-      }
-
-      actualVehicleId = vehicle.id
+    const vehicle = await validateVehicleInFranchise(supabase, ctx.franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     if (dateParam) {
       const { data, error } = await supabase
         .from("daily_logs")
         .select("*")
-        .eq("vehicle_id", actualVehicleId)
+        .eq("vehicle_id", vehicle.id)
         .eq("log_date", dateParam)
         .maybeSingle()
 
@@ -63,7 +57,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase
       .from("daily_logs")
       .select("*")
-      .eq("vehicle_id", actualVehicleId)
+      .eq("vehicle_id", vehicle.id)
       .eq("log_date", yesterdayStr)
       .maybeSingle()
 

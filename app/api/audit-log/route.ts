@@ -1,7 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getActiveFranchiseContext, isContextError, contextErrorResponse } from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const tableFilter = searchParams.get("table")
@@ -9,14 +14,13 @@ export async function GET(request: NextRequest) {
     const managerOverrideOnly = searchParams.get("manager_override") === "true"
     const limit = Number.parseInt(searchParams.get("limit") || "50")
 
-    const supabase = createClient()
-
-    let query = supabase
+    let query = ctx.supabase
       .from("audit_log")
       .select(`
         *,
         users:changed_by_user_id(full_name, email)
       `)
+      .eq("franchise_id", ctx.franchiseId)
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -47,8 +51,12 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
     const body = await request.json()
 
     const {
@@ -57,14 +65,13 @@ export async function POST(request: NextRequest) {
       action,
       old_values,
       new_values,
-      changed_by_user_id,
       manager_override,
       change_reason,
       ip_address,
       user_agent,
     } = body
 
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("audit_log")
       .insert({
         table_name,
@@ -72,7 +79,8 @@ export async function POST(request: NextRequest) {
         action,
         old_values,
         new_values,
-        changed_by_user_id: changed_by_user_id || "00000000-0000-0000-0000-000000000001", // Default manager ID
+        changed_by_user_id: ctx.user.id,
+        franchise_id: ctx.franchiseId,
         manager_override: manager_override || false,
         change_reason,
         ip_address,

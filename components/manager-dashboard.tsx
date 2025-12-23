@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Truck, AlertTriangle, Settings, BarChart3, FileText, Edit3, History } from "lucide-react"
+import { ArrowLeft, Truck, AlertTriangle, Settings, BarChart3, FileText, Edit3, History, LogOut } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 const ManagerDashboard = () => {
   const router = useRouter()
@@ -125,6 +126,16 @@ const ManagerDashboard = () => {
 
   const handleScheduleMaintenanceFromIssue = (issueId: string, vehicleNumber: string) => {
     router.push(`/vehicle/${vehicleNumber}/schedule-maintenance`)
+  }
+
+  const handleLogout = async () => {
+    try {
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push("/auth/login")
+    } catch (error) {
+      console.error("Error logging out:", error)
+    }
   }
 
   return (
@@ -366,6 +377,17 @@ const ManagerDashboard = () => {
             </div>
           </CardContent>
         </Card>
+
+        <div className="flex justify-center pb-6">
+          <Button
+            variant="outline"
+            className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground bg-transparent"
+            onClick={handleLogout}
+          >
+            <LogOut className="h-4 w-4" />
+            Logout
+          </Button>
+        </div>
       </div>
     </div>
   )

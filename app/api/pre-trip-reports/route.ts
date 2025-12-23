@@ -1,9 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getActiveFranchiseContext, isContextError, contextErrorResponse } from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
     const { searchParams } = new URL(request.url)
 
     const days = searchParams.get("days")
@@ -14,19 +18,16 @@ export async function GET(request: NextRequest) {
     let endDate: Date
 
     if (startParam && endParam) {
-      // Calendar mode - use specific date range
       startDate = new Date(startParam)
       endDate = new Date(endParam)
     } else {
-      // Legacy mode - use days parameter
       const daysCount = Number.parseInt(days || "7")
       endDate = new Date()
       startDate = new Date()
       startDate.setDate(endDate.getDate() - daysCount)
     }
 
-    // Fetch checklist reports with vehicle and user info
-    const { data: reports, error } = await supabase
+    const { data: reports, error } = await ctx.supabase
       .from("daily_checklists")
       .select(`
         id,
@@ -39,15 +40,17 @@ export async function GET(request: NextRequest) {
         fluid_levels_ok,
         mirrors_clean,
         safety_equipment_present,
-        vehicles (
+        vehicles!inner (
           vehicle_number,
           make,
-          model
+          model,
+          franchise_id
         ),
         users (
           full_name
         )
       `)
+      .eq("vehicles.franchise_id", ctx.franchiseId)
       .gte("checklist_date", startDate.toISOString().split("T")[0])
       .lte("checklist_date", endDate.toISOString().split("T")[0])
       .order("checklist_date", { ascending: false })

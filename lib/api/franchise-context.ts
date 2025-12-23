@@ -1,7 +1,11 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
 
-export type FranchiseRole = "owner" | "manager" | "driver"
+/**
+ * If you use additional roles (ex: super_admin), add them here.
+ * Keep this in sync with your DB check constraint / allowed values.
+ */
+export type FranchiseRole = "owner" | "manager" | "driver" | "super_admin"
 
 export interface FranchiseContext {
   supabase: ReturnType<typeof createClient>
@@ -27,8 +31,12 @@ export function contextErrorResponse(result: FranchiseContextError): NextRespons
 
 /**
  * Gets the active franchise context for the current authenticated user.
- * Returns 401 if user is not authenticated.
- * Returns 403 if user has no active franchise membership.
+ * - Returns 401 if user is not authenticated.
+ * - Returns 403 if user has no active franchise membership.
+ *
+ * IMPORTANT:
+ * We pick the most recently created active membership to avoid "old membership wins"
+ * issues during testing/migrations.
  */
 export async function getActiveFranchiseContext(): Promise<FranchiseContextResult> {
   const supabase = createClient()
@@ -41,13 +49,13 @@ export async function getActiveFranchiseContext(): Promise<FranchiseContextResul
 
   const user = userData.user
 
-  // Load active membership from franchise_memberships
+  // Load active membership from franchise_memberships (newest active wins)
   const { data: membership, error: membershipError } = await supabase
     .from("franchise_memberships")
     .select("franchise_id, role")
     .eq("user_id", user.id)
     .eq("is_active", true)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -64,28 +72,39 @@ export async function getActiveFranchiseContext(): Promise<FranchiseContextResul
     supabase,
     user: { id: user.id, email: user.email },
     franchiseId: membership.franchise_id as string,
-    role: membership.role as FranchiseRole,
+    role: (membership.role as FranchiseRole) || "driver",
   }
 }
 
 /**
  * Helper to validate that a vehicle belongs to the active franchise.
- * Returns the vehicle data if valid, null otherwise.
+ *
+ * Accepts either:
+ * - UUID `vehicles.id`
+ * - vehicle number (case-insensitive, exact match after normalization)
+ *
+ * Returns minimal vehicle fields if valid, otherwise null.
  */
 export async function validateVehicleInFranchise(
   supabase: ReturnType<typeof createClient>,
   franchiseId: string,
   vehicleIdentifier: string,
 ): Promise<{ id: string; vehicle_number: string; current_mileage: number } | null> {
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(vehicleIdentifier)
+  const input = (vehicleIdentifier || "").trim()
+  if (!input) return null
 
-  let query = supabase.from("vehicles").select("id, vehicle_number, current_mileage").eq("franchise_id", franchiseId)
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input)
+
+  let query = supabase
+    .from("vehicles")
+    .select("id, vehicle_number, current_mileage")
+    .eq("franchise_id", franchiseId)
 
   if (isUUID) {
-    query = query.eq("id", vehicleIdentifier)
+    query = query.eq("id", input)
   } else {
-    // Case-insensitive match for vehicle_number
-    query = query.ilike("vehicle_number", vehicleIdentifier)
+    // Exact match on normalized vehicle number to avoid accidental partial matches
+    query = query.eq("vehicle_number", input.toUpperCase())
   }
 
   const { data, error } = await query.maybeSingle()
@@ -95,12 +114,12 @@ export async function validateVehicleInFranchise(
     return null
   }
 
-  return data
+  return data ?? null
 }
 
 /**
- * Helper to check if user has manager or owner role.
+ * Helper to check if user has manager-level permissions.
  */
 export function requireManagerRole(role: FranchiseRole): boolean {
-  return role === "manager" || role === "owner"
+  return role === "manager" || role === "owner" || role === "super_admin"
 }

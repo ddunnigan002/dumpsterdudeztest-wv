@@ -1,32 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function POST(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
     const { vehicleId, endMileage, date } = await request.json()
     console.log("[v0] End Day API: Received request", { vehicleId, endMileage, date })
 
-    const supabase = createClient()
-
-    // First, get the vehicle UUID from the vehicle_number
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id, current_mileage")
-      .eq("vehicle_number", vehicleId)
-      .maybeSingle()
-
-    console.log("[v0] End Day API: Vehicle lookup result", { vehicle, vehicleError })
-
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    const { data, error } = await supabase
+    console.log("[v0] End Day API: Vehicle lookup result", { vehicle })
+
+    const { data, error } = await ctx.supabase
       .from("daily_logs")
       .upsert(
         {
           vehicle_id: vehicle.id,
-          driver_id: null,
+          driver_id: ctx.user.id,
           start_mileage: vehicle.current_mileage,
           end_mileage: endMileage,
           log_date: new Date(date).toISOString().split("T")[0],
@@ -45,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Failed to save end day" }, { status: 500 })
     }
 
-    const { error: updateError } = await supabase
+    const { error: updateError } = await ctx.supabase
       .from("vehicles")
       .update({ current_mileage: endMileage })
       .eq("id", vehicle.id)

@@ -1,27 +1,30 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function POST(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
     const { vehicleId, description, photos, date, severity, manager_override } = await request.json()
 
-    const supabase = createClient()
-
-    // First, get the vehicle UUID from the vehicle_number
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", vehicleId)
-      .single()
-
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("vehicle_issues")
       .insert({
         vehicle_id: vehicle.id,
+        franchise_id: ctx.franchiseId,
         description,
         severity: severity || "medium",
         photos: photos || [],

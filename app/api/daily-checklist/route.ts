@@ -1,9 +1,18 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const vehicleId = searchParams.get("vehicleId")
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
@@ -12,30 +21,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Vehicle ID is required" }, { status: 400 })
     }
 
-    // Check if vehicleId is a UUID or vehicle_number
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vehicleId)
-
-    let actualVehicleId = vehicleId
-
-    if (!isUUID) {
-      const { data: vehicle, error: vehicleError } = await supabase
-        .from("vehicles")
-        .select("id")
-        .ilike("vehicle_number", vehicleId)
-        .maybeSingle()
-
-      if (vehicleError || !vehicle) {
-        return NextResponse.json({ completed: false }, { status: 200 })
-      }
-
-      actualVehicleId = vehicle.id
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ completed: false }, { status: 200 })
     }
 
     // Check if checklist exists for this vehicle and date
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("daily_checklists")
       .select("id, overall_status")
-      .eq("vehicle_id", actualVehicleId)
+      .eq("vehicle_id", vehicle.id)
       .eq("checklist_date", date)
       .maybeSingle()
 
@@ -57,10 +52,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   console.log("🔵 API: Daily checklist POST request received")
 
-  try {
-    const supabase = createClient()
-    console.log("🔵 API: Supabase client created")
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
 
+  try {
     let body
     try {
       body = await request.json()
@@ -85,25 +82,13 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Looking for vehicle with number:", vehicleNumber.toUpperCase())
 
-    // Find vehicle by vehicle_number (case-insensitive)
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .ilike("vehicle_number", `%${vehicleNumber.toUpperCase()}%`)
-      .maybeSingle()
-
-    console.log("🔵 API: Vehicle query result:", { vehicle, vehicleError })
-
-    if (vehicleError || !vehicle) {
-      console.error("❌ API: Vehicle not found:", vehicleError)
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleNumber)
+    if (!vehicle) {
+      console.error("❌ API: Vehicle not found in franchise")
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    // Create or get a default system user instead of requiring authentication
-    console.log("🔵 API: Using default system user (no login required)")
-
-    // Use a default user ID - you can change this to any UUID you want
-    const defaultUserId = "8cd2bf7a-2442-4468-8131-d3d2764db3b1"
+    console.log("🔵 API: Vehicle found in franchise:", vehicle)
 
     // Helper function to safely get checklist item status
     const getItemStatus = (itemId: string) => {
@@ -114,10 +99,9 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Building checklist data...")
 
-    // Build checklist data object dynamically - only with existing columns
     const checklistData = {
       vehicle_id: vehicle.id,
-      driver_id: defaultUserId, // Using default user instead of authenticated user
+      driver_id: ctx.user.id, // Use authenticated user
       checklist_date: new Date().toISOString().split("T")[0],
       overall_status: checklist.some((item: any) => item.status === "fail")
         ? "fail"
@@ -125,7 +109,6 @@ export async function POST(request: NextRequest) {
           ? "pending"
           : "pass",
       notes: notes || null,
-      // Removed checklist_items and photos columns - they don't exist in your table
     }
 
     console.log("🔵 API: Base checklist data:", JSON.stringify(checklistData, null, 2))
@@ -145,16 +128,13 @@ export async function POST(request: NextRequest) {
       console.log(`🔵 API: Mapped ${frontendId} -> ${dbColumn} = ${status}`)
     })
 
-    // Set default values for items not in frontend but exist in DB
-    checklistData.mirrors_clean = true
-    checklistData.safety_equipment_present = true
     // Note: signature_url and created_at will be handled automatically by the database
 
     console.log("🔵 API: Final checklist data:", JSON.stringify(checklistData, null, 2))
 
     console.log("🔵 API: Attempting to upsert to daily_checklists table...")
 
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("daily_checklists")
       .upsert(checklistData, {
         onConflict: "vehicle_id,checklist_date",

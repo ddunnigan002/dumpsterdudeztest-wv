@@ -1,19 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { getActiveFranchiseContext, isContextError, contextErrorResponse } from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest) {
+  const ctx = await getActiveFranchiseContext()
+  if (isContextError(ctx)) {
+    return contextErrorResponse(ctx)
+  }
+
   try {
-    const supabase = createClient()
     const { searchParams } = new URL(request.url)
     const days = Number.parseInt(searchParams.get("days") || "30")
     const vehicleId = searchParams.get("vehicleId")
 
-    // Calculate date range
     const endDate = new Date()
     const startDate = new Date()
     startDate.setDate(endDate.getDate() - days)
 
-    let query = supabase
+    let query = ctx.supabase
       .from("daily_logs")
       .select(`
         log_date,
@@ -21,24 +24,26 @@ export async function GET(request: NextRequest) {
         end_mileage,
         fuel_added,
         fuel_cost,
-        vehicles (
+        vehicles!inner (
           vehicle_number,
           make,
-          model
+          model,
+          franchise_id
         )
       `)
+      .eq("vehicles.franchise_id", ctx.franchiseId)
       .gte("log_date", startDate.toISOString().split("T")[0])
       .lte("log_date", endDate.toISOString().split("T")[0])
       .not("fuel_added", "is", null)
       .not("fuel_cost", "is", null)
       .order("log_date", { ascending: true })
 
-    // Filter by vehicle if specified
     if (vehicleId && vehicleId !== "all") {
-      const { data: vehicle } = await supabase
+      const { data: vehicle } = await ctx.supabase
         .from("vehicles")
         .select("id")
         .eq("vehicle_number", vehicleId.toUpperCase())
+        .eq("franchise_id", ctx.franchiseId)
         .single()
 
       if (vehicle) {
