@@ -248,7 +248,7 @@ export function ManagerSettings() {
   }
 
   const addChecklistItem = async () => {
-    if (!showAddItem.type || !showAddItem.label || !showAddItem.name) return
+    if (!showAddItem.type || !showAddItem.label) return
 
     try {
       const response = await fetch("/api/checklist-items", {
@@ -257,7 +257,7 @@ export function ManagerSettings() {
         body: JSON.stringify({
           checklistType: showAddItem.type,
           itemLabel: showAddItem.label,
-          itemName: showAddItem.name,
+          itemName: showAddItem.name || `custom_${showAddItem.label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40)}`,
           displayOrder: checklistItems[showAddItem.type as keyof typeof checklistItems].length,
         }),
       })
@@ -792,28 +792,7 @@ export function ManagerSettings() {
                               This is what drivers will see.
                             </p>
                           </div>
-
-                          <div>
-                            <Label htmlFor={`name-${type}`}>Internal Name</Label>
-                            <Input
-                              id={`name-${type}`}
-                              placeholder="custom_check_tarp_straps"
-                              value={showAddItem.name}
-                              onChange={(e) =>
-                                setShowAddItem((prev) => ({
-                                  ...prev,
-                                  name: e.target.value
-                                    .toLowerCase()
-                                    .trim()
-                                    .replace(/[^a-z0-9_]+/g, "_"),
-                                }))
-                              }
-                            />
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Saved as a template item. It won’t change your core checklist columns.
-                            </p>
-                          </div>
-
+            
                           <div className="flex gap-2">
                             <Button
                               size="sm"

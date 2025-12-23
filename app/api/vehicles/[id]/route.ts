@@ -6,62 +6,107 @@ function isValidUUID(str: string): boolean {
   return uuidRegex.test(str)
 }
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+async function getActiveFranchiseContext() {
+  const supabase = createClient()
+
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError || !userData?.user) {
+    return { supabase, error: "Not authenticated", status: 401 as const }
+  }
+
+  const user = userData.user
+
+  const { data: membership, error: membershipError } = await supabase
+    .from("franchise_memberships")
+    .select("franchise_id, is_active")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .single()
+
+  if (membershipError || !membership?.franchise_id) {
+    return { supabase, error: "No active franchise membership", status: 403 as const }
+  }
+
+  return { supabase, user, franchiseId: membership.franchise_id as string }
+}
+
+export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("[v0] Vehicle by ID API: Fetching vehicle with ID:", params.id)
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status })
 
-    let data, error
+    const { supabase, franchiseId } = ctx
+    const identifier = params.id
 
-    if (isValidUUID(params.id)) {
-      // Query by UUID id
-      const result = await supabase.from("vehicles").select("*").eq("id", params.id).maybeSingle()
-      data = result.data
-      error = result.error
+    let query = supabase.from("vehicles").select("*").eq("franchise_id", franchiseId)
+
+    if (isValidUUID(identifier)) {
+      query = query.eq("id", identifier)
     } else {
-      // Query by vehicle_number
-      const result = await supabase
-        .from("vehicles")
-        .select("*")
-        .eq("vehicle_number", params.id.toUpperCase())
-        .maybeSingle()
-      data = result.data
-      error = result.error
+      query = query.eq("vehicle_number", identifier.toUpperCase())
     }
 
-    if (!data && !error) {
-      console.log("[v0] Vehicle by ID API: Vehicle not found")
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
-    }
+    const { data, error } = await query.maybeSingle()
 
     if (error) {
-      console.error("[v0] Vehicle by ID API: Database error:", error)
+      console.error("[vehicles/[id] GET] Database error:", error)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
 
-    console.log("[v0] Vehicle by ID API: Returning vehicle from database")
-    return NextResponse.json(data)
+    if (!data) {
+      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ vehicle: data })
   } catch (error) {
-    console.error("[v0] Vehicle by ID API: Caught error:", error)
+    console.error("[vehicles/[id] GET] Caught error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status })
+
+    const { supabase, franchiseId } = ctx
+    const identifier = params.id
     const body = await request.json()
 
-    const { data, error } = await supabase.from("vehicles").update(body).eq("id", params.id).select().single()
+    // Safety: never allow these to be updated from the client
+    const {
+      id,
+      franchise_id,
+      created_at,
+      updated_at,
+      // allow everything else:
+      ...safeBody
+    } = body ?? {}
+
+    // We must only update within the active franchise
+    let matchQuery = supabase.from("vehicles").update({ ...safeBody, updated_at: new Date().toISOString() }).eq("franchise_id", franchiseId)
+
+    if (isValidUUID(identifier)) {
+      matchQuery = matchQuery.eq("id", identifier)
+    } else {
+      matchQuery = matchQuery.eq("vehicle_number", identifier.toUpperCase())
+    }
+
+    const { data, error } = await matchQuery.select().maybeSingle()
 
     if (error) {
-      console.error("Database error:", error)
+      console.error("[vehicles/[id] PUT] Database error:", error)
       return NextResponse.json({ error: "Failed to update vehicle" }, { status: 500 })
     }
 
-    return NextResponse.json(data)
+    if (!data) {
+      // Either not found, or found but in a different franchise
+      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    }
+
+    return NextResponse.json({ success: true, vehicle: data })
   } catch (error) {
-    console.error("API error:", error)
+    console.error("[vehicles/[id] PUT] API error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,6 +1,24 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
+type ChecklistType = "daily" | "weekly" | "monthly"
+
+function isChecklistType(value: any): value is ChecklistType {
+  return value === "daily" || value === "weekly" || value === "monthly"
+}
+
+function slugifyInternalName(label: string) {
+  const generated = label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 40)
+
+  // Always prefix custom_ so we can distinguish from core items later
+  return generated ? `custom_${generated}` : `custom_item_${Date.now()}`
+}
+
 async function getActiveFranchiseContext() {
   const supabase = createClient()
 
@@ -32,17 +50,20 @@ export async function GET(request: NextRequest) {
 
     const { supabase, franchiseId } = ctx
     const { searchParams } = new URL(request.url)
-    const checklistType = searchParams.get("type")
+    const typeParam = searchParams.get("type")
 
-    if (!checklistType) {
+    if (!typeParam) {
       return NextResponse.json({ error: "Missing query param: type", items: [] }, { status: 400 })
+    }
+    if (!isChecklistType(typeParam)) {
+      return NextResponse.json({ error: "Invalid checklist type", items: [] }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from("checklist_items")
       .select("*")
       .eq("franchise_id", franchiseId)
-      .eq("checklist_type", checklistType)
+      .eq("checklist_type", typeParam)
       .eq("is_active", true)
       .order("display_order", { ascending: true })
 
@@ -63,17 +84,33 @@ export async function POST(request: NextRequest) {
     const { supabase, franchiseId } = ctx
 
     const body = await request.json()
-    const checklistType = (body?.checklistType || body?.checklist_type) as string | undefined
-    const itemName = (body?.itemName || body?.item_name) as string | undefined
-    const itemLabel = (body?.itemLabel || body?.item_label) as string | undefined
+
+    const typeParam = (body?.checklistType || body?.checklist_type) as string | undefined
+    const rawLabel = (body?.itemLabel || body?.item_label) as string | undefined
+    const rawName = (body?.itemName || body?.item_name) as string | undefined
     const displayOrder = Number.isFinite(body?.displayOrder) ? Number(body.displayOrder) : undefined
 
-    if (!checklistType || !itemName || !itemLabel) {
-      return NextResponse.json(
-        { error: "Missing required fields: checklistType, itemName, itemLabel" },
-        { status: 400 }
-      )
+    if (!typeParam || !isChecklistType(typeParam)) {
+      return NextResponse.json({ error: "Missing or invalid checklistType" }, { status: 400 })
     }
+
+    if (!rawLabel || !rawLabel.trim()) {
+      return NextResponse.json({ error: "Missing required field: itemLabel" }, { status: 400 })
+    }
+
+    const itemLabel = rawLabel.trim()
+
+    // itemName is OPTIONAL. If not provided, generate from label.
+    // Also normalize if provided.
+    const itemName =
+      rawName && rawName.trim()
+        ? rawName
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9_]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 60)
+        : slugifyInternalName(itemLabel)
 
     // If display order not supplied, append to end
     let finalOrder = displayOrder
@@ -82,7 +119,7 @@ export async function POST(request: NextRequest) {
         .from("checklist_items")
         .select("display_order")
         .eq("franchise_id", franchiseId)
-        .eq("checklist_type", checklistType)
+        .eq("checklist_type", typeParam)
         .order("display_order", { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -94,7 +131,7 @@ export async function POST(request: NextRequest) {
       .from("checklist_items")
       .insert({
         franchise_id: franchiseId,
-        checklist_type: checklistType,
+        checklist_type: typeParam,
         item_name: itemName,
         item_label: itemLabel,
         display_order: finalOrder,
@@ -124,13 +161,24 @@ export async function PUT(request: NextRequest) {
 
     if (!itemId) return NextResponse.json({ error: "Item ID required" }, { status: 400 })
 
-    // IMPORTANT: Only allow updating items in your franchise (extra safety)
     const updatePayload: Record<string, any> = {
       updated_at: new Date().toISOString(),
     }
 
-    if (typeof body?.itemLabel === "string") updatePayload.item_label = body.itemLabel
-    if (typeof body?.itemName === "string") updatePayload.item_name = body.itemName
+    if (typeof body?.itemLabel === "string" && body.itemLabel.trim()) {
+      updatePayload.item_label = body.itemLabel.trim()
+    }
+
+    // itemName is OPTIONAL here too; normalize if provided
+    if (typeof body?.itemName === "string" && body.itemName.trim()) {
+      updatePayload.item_name = body.itemName
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9_]+/g, "_")
+        .replace(/^_+|_+$/g, "")
+        .slice(0, 60)
+    }
+
     if (Number.isFinite(body?.displayOrder)) updatePayload.display_order = Number(body.displayOrder)
     if (typeof body?.isActive === "boolean") updatePayload.is_active = body.isActive
 
