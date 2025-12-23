@@ -41,7 +41,7 @@ export default function SignUpForm() {
           <Image src="/dumpster-dudez-logo.svg" alt="Dumpster Dudez" width={120} height={60} className="h-16 w-auto" />
         </div>
         <h1 className="text-3xl font-bold tracking-tight text-gray-900">Join Dumpster Dudez</h1>
-        <p className="text-lg text-gray-600">Create your franchise account</p>
+        <p className="text-lg text-gray-600">Create your account</p>
       </div>
 
       <form action={formAction} className="space-y-6">
@@ -54,19 +54,22 @@ export default function SignUpForm() {
         )}
 
         <div className="space-y-4">
+          {/* ✅ Replace Franchise Name with Franchise Code */}
           <div className="space-y-2">
-            <label htmlFor="franchiseName" className="block text-sm font-medium text-gray-700">
-              Franchise Name
+            <label htmlFor="franchiseCode" className="block text-sm font-medium text-gray-700">
+              Franchise Code
             </label>
             <Input
-              id="franchiseName"
-              name="franchiseName"
+              id="franchiseCode"
+              name="franchiseCode"
               type="text"
-              placeholder="Dumpster Dudez - Your Location"
+              placeholder="ROCH"
               required
               className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
             />
+            <p className="text-xs text-gray-500">Ask your admin for your franchise code (example: ROCH).</p>
           </div>
+
           <div className="space-y-2">
             <label htmlFor="fullName" className="block text-sm font-medium text-gray-700">
               Full Name
@@ -80,6 +83,7 @@ export default function SignUpForm() {
               className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
             />
           </div>
+
           <div className="space-y-2">
             <label htmlFor="email" className="block text-sm font-medium text-gray-700">
               Email
@@ -93,6 +97,7 @@ export default function SignUpForm() {
               className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
             />
           </div>
+
           <div className="space-y-2">
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
               Phone Number
@@ -105,10 +110,13 @@ export default function SignUpForm() {
               className="bg-white border-gray-300 text-gray-900 placeholder:text-gray-500"
             />
           </div>
+
           <div className="space-y-2">
             <label htmlFor="role" className="block text-sm font-medium text-gray-700">
               Role
             </label>
+            {/* You can keep the dropdown for now, but your server action should restrict self-signup.
+                Recommended: only allow owners to self-sign up. */}
             <Select name="role" defaultValue="owner">
               <SelectTrigger className="bg-white border-gray-300">
                 <SelectValue />
@@ -120,17 +128,12 @@ export default function SignUpForm() {
               </SelectContent>
             </Select>
           </div>
+
           <div className="space-y-2">
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              required
-              className="bg-white border-gray-300 text-gray-900"
-            />
+            <Input id="password" name="password" type="password" required className="bg-white border-gray-300 text-gray-900" />
           </div>
         </div>
 
