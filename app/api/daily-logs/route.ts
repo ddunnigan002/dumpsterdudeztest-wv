@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest) {
   try {
@@ -11,17 +16,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Vehicle and date parameters required" }, { status: 400 })
     }
 
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
 
-    // Get vehicle ID from vehicle number
-    const { data: vehicleData, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", vehicle)
-      .single()
+    const { supabase, franchiseId } = ctx
 
-    if (vehicleError || !vehicleData) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicleData = await validateVehicleInFranchise(supabase, franchiseId, vehicle)
+    if (!vehicleData) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     // Fetch daily logs for the specific date
@@ -41,7 +45,7 @@ export async function GET(request: NextRequest) {
     const logsWithVehicle =
       logs?.map((log) => ({
         ...log,
-        vehicle_number: vehicle,
+        vehicle_number: vehicleData.vehicle_number,
       })) || []
 
     return NextResponse.json({ logs: logsWithVehicle })
@@ -53,7 +57,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
+
+    const { supabase, user, franchiseId } = ctx
     const body = await request.json()
 
     const {
@@ -67,22 +76,16 @@ export async function POST(request: NextRequest) {
       manager_override,
     } = body
 
-    // Get vehicle ID from vehicle number
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", vehicle_number)
-      .single()
-
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicle_number)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     const { data, error } = await supabase
       .from("daily_logs")
       .insert({
         vehicle_id: vehicle.id,
-        driver_id: "00000000-0000-0000-0000-000000000001", // Default driver for manager overrides
+        driver_id: user.id, // Use authenticated user ID instead of mock
         log_date,
         start_mileage,
         end_mileage,
@@ -102,7 +105,11 @@ export async function POST(request: NextRequest) {
 
     // Update vehicle current mileage if end_mileage is provided
     if (end_mileage) {
-      await supabase.from("vehicles").update({ current_mileage: end_mileage }).eq("id", vehicle.id)
+      await supabase
+        .from("vehicles")
+        .update({ current_mileage: end_mileage })
+        .eq("id", vehicle.id)
+        .eq("franchise_id", franchiseId) // Scope update to franchise
     }
 
     return NextResponse.json({ success: true, data })

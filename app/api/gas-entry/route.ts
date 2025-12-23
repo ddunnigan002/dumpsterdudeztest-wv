@@ -1,43 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function POST(request: NextRequest) {
   try {
-    const { vehicleId, gallons, totalCost, date, manager_override } = await request.json()
+    const { vehicleId, gallons, totalCost, date } = await request.json()
 
-    const supabase = createClient()
-
-    if (!manager_override) {
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser()
-
-      if (authError || !user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-      }
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
     }
 
-    // First, get the vehicle UUID from the vehicle_number
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", vehicleId)
-      .single()
+    const { supabase, user, franchiseId } = ctx
 
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     const { data, error } = await supabase
       .from("daily_logs")
       .insert({
         vehicle_id: vehicle.id,
-        driver_id: manager_override ? "00000000-0000-0000-0000-000000000001" : null,
+        driver_id: user.id, // Use authenticated user ID instead of mock
         gallons_purchased: gallons,
         fuel_cost: totalCost,
         log_date: new Date(date).toISOString().split("T")[0],
-        manager_override: manager_override || false,
+        manager_override: false,
         created_at: new Date().toISOString(),
       })
       .select()

@@ -1,19 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
+
+    const { supabase, user, franchiseId } = ctx
     const body = await request.json()
 
     const { vehicleId, startMileage, endMileage, fuelAdded, fuelCost, issuesReported, photos } = body
+
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
+    }
 
     // Insert daily log
     const { data, error } = await supabase
       .from("daily_logs")
       .insert({
-        vehicle_id: vehicleId,
-        driver_id: "00000000-0000-0000-0000-000000000001", // Mock driver ID for now
+        vehicle_id: vehicle.id,
+        driver_id: user.id, // Use authenticated user ID instead of mock
         log_date: new Date().toISOString().split("T")[0],
         start_mileage: Number.parseInt(startMileage),
         end_mileage: Number.parseInt(endMileage),
@@ -35,7 +50,8 @@ export async function POST(request: NextRequest) {
       await supabase
         .from("vehicles")
         .update({ current_mileage: Number.parseInt(endMileage) })
-        .eq("id", vehicleId)
+        .eq("id", vehicle.id)
+        .eq("franchise_id", franchiseId) // Scope update to franchise
     }
 
     return NextResponse.json({ success: true, data })

@@ -1,18 +1,23 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
 
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id")
-      .eq("vehicle_number", params.id)
-      .maybeSingle()
+    const { supabase, franchiseId } = ctx
 
-    if (vehicleError || !vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, params.id)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     const { data: lastLog, error } = await supabase

@@ -1,24 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log("[v0] Maintenance API: Starting request for vehicle:", params.id)
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
+
+    const { supabase, franchiseId } = ctx
     const vehicleId = params.id
 
-    // Get vehicle UUID and current mileage
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from("vehicles")
-      .select("id, current_mileage")
-      .ilike("vehicle_number", vehicleId)
-      .maybeSingle()
-
-    console.log("[v0] Maintenance API: Vehicle lookup result:", { vehicle, vehicleError })
-
-    if (vehicleError || !vehicle) {
-      console.log("[v0] Maintenance API: Vehicle not found for:", vehicleId)
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 })
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
     const currentMileage = vehicle.current_mileage || 0
@@ -40,36 +41,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     if (error) {
       console.error("Database error:", error)
-      const mockData = [
-        {
-          id: "1",
-          maintenance_type: "Oil Change",
-          due_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split("T")[0], // Tomorrow
-          due_mileage: currentMileage + 500,
-          priority: "high",
-          status: "pending",
-          type: currentMileage + 500 <= currentMileage ? "overdue" : "coming_soon",
-          message: currentMileage + 500 <= currentMileage ? "Oil change overdue" : "Oil change due tomorrow",
-        },
-      ]
-
-      if (vehicleId.toUpperCase() === "CHEVY") {
-        mockData.push({
-          id: "2",
-          maintenance_type: "PTO Service",
-          due_date: "2024-02-20",
-          due_mileage: currentMileage + 1000,
-          priority: "medium",
-          status: "pending",
-          type: "coming_soon",
-          message: "PTO service needed - not engaging properly",
-        })
-      }
-
-      return NextResponse.json({ upcomingMaintenance: mockData })
+      return NextResponse.json({ error: "Failed to fetch upcoming maintenance" }, { status: 500 })
     }
 
-    const formattedUpcoming = upcoming.map((item) => ({
+    const formattedUpcoming = (upcoming || []).map((item) => ({
       ...item,
       type:
         (item.due_mileage && item.due_mileage <= currentMileage) || (item.due_date && item.due_date <= today)

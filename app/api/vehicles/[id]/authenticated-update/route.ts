@@ -1,26 +1,36 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import {
+  getActiveFranchiseContext,
+  isContextError,
+  contextErrorResponse,
+  validateVehicleInFranchise,
+} from "@/lib/api/franchise-context"
 
 export async function PUT(request: NextRequest, { params }: { params: { vehicleId: string } }) {
   try {
-    const supabase = createClient()
+    const ctx = await getActiveFranchiseContext()
+    if (isContextError(ctx)) {
+      return contextErrorResponse(ctx)
+    }
+
+    const { supabase, franchiseId } = ctx
     const body = await request.json()
     const { vehicleId } = params
 
-    // Get current user
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicleId)
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    // Update vehicle
+    // Safety: never allow these to be updated from the client
+    const { id, franchise_id, created_at, updated_at, ...safeBody } = body ?? {}
+
+    // Update vehicle within the franchise
     const { data: updatedVehicle, error: updateError } = await supabase
       .from("vehicles")
-      .update({ ...body, updated_at: new Date().toISOString() })
-      .eq("id", vehicleId)
+      .update({ ...safeBody, updated_at: new Date().toISOString() })
+      .eq("id", vehicle.id)
+      .eq("franchise_id", franchiseId)
       .select()
       .single()
 
