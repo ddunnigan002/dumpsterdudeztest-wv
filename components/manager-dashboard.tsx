@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Truck, AlertTriangle, CheckCircle2, Clock, Wrench, FileText, Settings, LogOut } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
-import type { ManagerDashboardData } from "@/lib/manager-dashboard-data"
+import type { ManagerDashboardData, ComplianceDay, MaintenanceItem } from "@/lib/manager-dashboard-data"
 
 interface Props {
   userProfile: {
@@ -25,104 +25,29 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
   useEffect(() => {
     fetchDashboardData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchDashboardData = async () => {
     try {
-      // TODO: Replace with actual API call
-      // const response = await fetch(`/api/manager-dashboard?managerId=${userProfile.id}`)
-      // const data = await response.json()
+      setLoading(true)
 
-      // Mock data for now
-      const mockData: ManagerDashboardData = {
-        trucks: [
-          {
-            id: "1",
-            vehicleNumber: "TRUCK-01",
-            name: "Dans Truck",
-            status: "operational",
-            lastEOD: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
-            openIssuesCount: 0,
-            nextMaintenance: "Oil change in 420 miles",
-          },
-          {
-            id: "2",
-            vehicleNumber: "TRUCK-02",
-            name: "Kenworth",
-            status: "needs-attention",
-            lastEOD: null,
-            openIssuesCount: 2,
-            nextMaintenance: "Tire rotation overdue",
-          },
-        ],
-        actionItems: [
-          {
-            id: "a1",
-            type: "missed-eod",
-            urgency: "high",
-            label: "End of Day Report Missed",
-            truckName: "Kenworth",
-            ageOrDue: "Yesterday",
-            ctaLabel: "Complete EOD",
-            ctaLink: "/vehicle/TRUCK-02/end-day",
-          },
-          {
-            id: "a2",
-            type: "open-issue",
-            urgency: "medium",
-            label: "Check Engine Light",
-            truckName: "Kenworth",
-            ageOrDue: "3 days ago",
-            ctaLabel: "View Issue",
-            ctaLink: "/manager/vehicle/2",
-          },
-          {
-            id: "a3",
-            type: "maintenance-due",
-            urgency: "high",
-            label: "Tire Rotation Overdue",
-            truckName: "Kenworth",
-            ageOrDue: "Due 2 days ago",
-            ctaLabel: "Schedule",
-            ctaLink: "/vehicle/TRUCK-02/schedule-maintenance",
-          },
-        ],
-        complianceCalendar: generateMockCompliance(),
-        maintenanceForecast: [
-          {
-            id: "m1",
-            truckName: "Kenworth",
-            description: "Tire Rotation",
-            dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-            category: "overdue",
-          },
-          {
-            id: "m2",
-            truckName: "Dans Truck",
-            description: "Oil Change",
-            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-            category: "due-7days",
-          },
-          {
-            id: "m3",
-            truckName: "Dans Truck",
-            description: "Brake Inspection",
-            dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
-            category: "due-14days",
-          },
-          {
-            id: "m4",
-            truckName: "Kenworth",
-            description: "Annual Inspection",
-            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-            category: "later",
-          },
-        ],
+      const response = await fetch(`/api/manager-dashboard?managerId=${userProfile.id}`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+      })
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "")
+        throw new Error(`Failed to fetch dashboard: ${response.status} ${text}`)
       }
 
-      setData(mockData)
+      const liveData: ManagerDashboardData = await response.json()
+      setData(liveData)
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
+      setData(null)
     } finally {
       setLoading(false)
     }
@@ -137,6 +62,11 @@ export default function ManagerDashboard({ userProfile }: Props) {
       console.error("Error logging out:", error)
     }
   }
+
+  const maintenanceByTruck = useMemo(() => {
+    if (!data) return []
+    return groupMaintenanceByTruck(data.maintenanceForecast)
+  }, [data])
 
   if (loading) {
     return (
@@ -280,93 +210,11 @@ export default function ManagerDashboard({ userProfile }: Props) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5" />
-              Compliance (Last 30 Days)
+              Compliance
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {/* Daily EOD */}
-              <div>
-                <p className="text-sm font-medium mb-2">Daily End-of-Day</p>
-                <div className="flex gap-1 flex-wrap">
-                  {data.complianceCalendar.map((day) => (
-                    <div
-                      key={day.date}
-                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
-                        day.daily === "completed"
-                          ? "bg-green-500 text-white"
-                          : day.daily === "missed"
-                            ? "bg-red-500 text-white"
-                            : "bg-muted"
-                      }`}
-                      title={`${day.date}: ${day.daily || "N/A"}`}
-                    >
-                      {new Date(day.date).getDate()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Weekly Checklist */}
-              <div>
-                <p className="text-sm font-medium mb-2">Weekly Checklist</p>
-                <div className="flex gap-1 flex-wrap">
-                  {data.complianceCalendar.map((day) => (
-                    <div
-                      key={day.date}
-                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
-                        day.weekly === "completed"
-                          ? "bg-green-500 text-white"
-                          : day.weekly === "missed"
-                            ? "bg-red-500 text-white"
-                            : "bg-muted"
-                      }`}
-                      title={`${day.date}: ${day.weekly || "Not due"}`}
-                    >
-                      {new Date(day.date).getDate()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Monthly Checklist */}
-              <div>
-                <p className="text-sm font-medium mb-2">Monthly Checklist</p>
-                <div className="flex gap-1 flex-wrap">
-                  {data.complianceCalendar.map((day) => (
-                    <div
-                      key={day.date}
-                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
-                        day.monthly === "completed"
-                          ? "bg-green-500 text-white"
-                          : day.monthly === "missed"
-                            ? "bg-red-500 text-white"
-                            : "bg-muted"
-                      }`}
-                      title={`${day.date}: ${day.monthly || "Not due"}`}
-                    >
-                      {new Date(day.date).getDate()}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Legend */}
-              <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-green-500 rounded"></div>
-                  <span>Completed</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-red-500 rounded"></div>
-                  <span>Missed</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 bg-muted rounded"></div>
-                  <span>Not Due</span>
-                </div>
-              </div>
-            </div>
+            <ComplianceCalendarGrid days={data.complianceCalendar} weekStartsOnMonday />
           </CardContent>
         </Card>
 
@@ -379,106 +227,52 @@ export default function ManagerDashboard({ userProfile }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {/* Overdue */}
-              {data.maintenanceForecast.filter((m) => m.category === "overdue").length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                    <p className="text-sm font-medium text-destructive">Overdue</p>
+            <div className="space-y-6">
+              {maintenanceByTruck.map(({ truckName, list }) => (
+                <div key={truckName} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">{truckName}</p>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                      <LegendDot label="Overdue" className="bg-red-500" />
+                      <LegendDot label="< 7d" className="bg-amber-500" />
+                      <LegendDot label="< 14d" className="bg-blue-500" />
+                      <LegendDot label="Later" className="bg-gray-400" />
+                    </div>
                   </div>
-                  <div className="space-y-2 pl-5">
-                    {data.maintenanceForecast
-                      .filter((m) => m.category === "overdue")
-                      .map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{item.description}</p>
-                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
 
-              {/* Due < 7 days */}
-              {data.maintenanceForecast.filter((m) => m.category === "due-7days").length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
-                    <p className="text-sm font-medium text-amber-600">Due within 7 days</p>
-                  </div>
-                  <div className="space-y-2 pl-5">
-                    {data.maintenanceForecast
-                      .filter((m) => m.category === "due-7days")
-                      .map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-2 bg-amber-50 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{item.description}</p>
-                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
-                          </div>
+                  <div className="space-y-2">
+                    {list.map((item) => (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-2 rounded border ${
+                          item.category === "overdue"
+                            ? "bg-red-50"
+                            : item.category === "due-7days"
+                              ? "bg-amber-50"
+                              : item.category === "due-14days"
+                                ? "bg-blue-50"
+                                : "bg-muted/50"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{item.description}</p>
                           <p className="text-xs text-muted-foreground">
-                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                            {item.category === "overdue"
+                              ? "Overdue"
+                              : item.category === "due-7days"
+                                ? "Due within 7 days"
+                                : item.category === "due-14days"
+                                  ? "Due within 14 days"
+                                  : "Later"}
                           </p>
                         </div>
-                      ))}
+                        <p className="text-xs text-muted-foreground">{item.dueDate ? formatDate(item.dueDate) : "TBD"}</p>
+                      </div>
+                    ))}
+                    {list.length === 0 && <p className="text-sm text-muted-foreground">No scheduled items.</p>}
                   </div>
                 </div>
-              )}
-
-              {/* Due < 14 days */}
-              {data.maintenanceForecast.filter((m) => m.category === "due-14days").length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                    <p className="text-sm font-medium text-blue-600">Due within 14 days</p>
-                  </div>
-                  <div className="space-y-2 pl-5">
-                    {data.maintenanceForecast
-                      .filter((m) => m.category === "due-14days")
-                      .map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-2 bg-blue-50 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{item.description}</p>
-                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Later */}
-              {data.maintenanceForecast.filter((m) => m.category === "later").length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
-                    <p className="text-sm font-medium text-muted-foreground">Later (14+ days)</p>
-                  </div>
-                  <div className="space-y-2 pl-5">
-                    {data.maintenanceForecast
-                      .filter((m) => m.category === "later")
-                      .map((item) => (
-                        <div key={item.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                          <div>
-                            <p className="text-sm font-medium">{item.description}</p>
-                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
-                          </p>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              )}
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -530,41 +324,168 @@ export default function ManagerDashboard({ userProfile }: Props) {
   )
 }
 
+/* =========================
+   Helpers + Components
+========================= */
+
+function LegendDot({ label, className }: { label: string; className: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className={`w-2.5 h-2.5 rounded-full ${className}`} />
+      {label}
+    </span>
+  )
+}
+
 function formatRelativeTime(isoDate: string): string {
   const date = new Date(isoDate)
   const now = new Date()
   const diffMs = now.getTime() - date.getTime()
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffMins = Math.floor(diffMs / (1000 * 60))
 
-  if (diffHours < 24) {
-    return `${diffHours} hours ago`
-  }
+  if (diffMins < 2) return "just now"
+  if (diffMins < 60) return `${diffMins} min ago`
+  const diffHours = Math.floor(diffMins / 60)
+  if (diffHours < 24) return `${diffHours} hour${diffHours !== 1 ? "s" : ""} ago`
   const diffDays = Math.floor(diffHours / 24)
-  return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+  return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`
 }
 
 function formatDate(isoDate: string): string {
   return new Date(isoDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
 }
 
-function generateMockCompliance() {
-  const calendar = []
-  const today = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    const dateStr = date.toISOString().split("T")[0]
-
-    const dailyStatus = Math.random() > 0.15 ? "completed" : "missed"
-    const weeklyStatus = date.getDay() === 1 ? (Math.random() > 0.2 ? "completed" : "missed") : null
-    const monthlyStatus = date.getDate() === 1 ? "completed" : null
-
-    calendar.push({
-      date: dateStr,
-      daily: dailyStatus,
-      weekly: weeklyStatus,
-      monthly: monthlyStatus,
-    })
+function groupMaintenanceByTruck(items: MaintenanceItem[]) {
+  const byTruck = new Map<string, MaintenanceItem[]>()
+  for (const item of items) {
+    const key = item.truckName
+    byTruck.set(key, [...(byTruck.get(key) ?? []), item])
   }
-  return calendar
+  for (const [k, list] of byTruck) {
+    list.sort((a, b) => (a.dueDate ?? "9999-99-99").localeCompare(b.dueDate ?? "9999-99-99"))
+    byTruck.set(k, list)
+  }
+  return [...byTruck.entries()].map(([truckName, list]) => ({ truckName, list }))
+}
+
+function ComplianceCalendarGrid({
+  days,
+  weekStartsOnMonday = true,
+}: {
+  days: ComplianceDay[]
+  weekStartsOnMonday?: boolean
+}) {
+  const { headers, rows } = buildCalendarGrid(days, weekStartsOnMonday)
+
+  const rowDefs = [
+    { title: "Daily End-of-Day", key: "daily" as const, hideNonDue: false },
+    { title: "Weekly Checklist", key: "weekly" as const, hideNonDue: true },
+    { title: "Monthly Checklist", key: "monthly" as const, hideNonDue: true },
+  ]
+
+  return (
+    <div className="space-y-5">
+      <p className="text-sm text-muted-foreground">Last ~6 weeks</p>
+
+      <div className="grid grid-cols-8 gap-1 text-xs text-muted-foreground">
+        <div />
+        {headers.map((h) => (
+          <div key={h} className="text-center">
+            {h}
+          </div>
+        ))}
+      </div>
+
+      {rowDefs.map((rowDef) => (
+        <div key={rowDef.title} className="grid grid-cols-8 gap-1 items-center">
+          <div className="text-sm font-medium pr-2">{rowDef.title}</div>
+
+          {rows.flat().map((d) => {
+            const status = d[rowDef.key]
+            const isNonDue = status === null
+
+            if (rowDef.hideNonDue && isNonDue) {
+              return <div key={`${rowDef.key}-${d.date}`} className="w-7 h-7" title={`${d.date}: Not due`} />
+            }
+
+            return (
+              <div key={`${rowDef.key}-${d.date}`} className="w-7 h-7" title={`${d.date}: ${status ?? "N/A"}`}>
+                <div
+                  className={`w-7 h-7 rounded flex items-center justify-center text-[11px] border ${
+                    status === "completed"
+                      ? "bg-green-500 text-white border-green-600"
+                      : status === "missed"
+                        ? "bg-red-500 text-white border-red-600"
+                        : "bg-muted text-muted-foreground border-muted"
+                  }`}
+                />
+              </div>
+            )
+          })}
+        </div>
+      ))}
+
+      <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-500 rounded border border-green-600" />
+          <span>Completed</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-red-500 rounded border border-red-600" />
+          <span>Missed</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function buildCalendarGrid(days: ComplianceDay[], weekStartsOnMonday: boolean) {
+  if (!days || days.length === 0) {
+    return {
+      headers: weekStartsOnMonday ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      rows: [] as ComplianceDay[][],
+    }
+  }
+
+  const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date))
+  const map = new Map(sorted.map((d) => [d.date, d]))
+
+  const start = new Date(sorted[0].date + "T00:00:00")
+  const end = new Date(sorted[sorted.length - 1].date + "T00:00:00")
+
+  const startDay = start.getDay()
+  const startOffset = weekStartsOnMonday ? (startDay === 0 ? 6 : startDay - 1) : startDay
+  const gridStart = new Date(start)
+  gridStart.setDate(gridStart.getDate() - startOffset)
+
+  const endDay = end.getDay()
+  const endOffset = weekStartsOnMonday ? (endDay === 0 ? 0 : 7 - endDay) : 6 - endDay
+  const gridEnd = new Date(end)
+  gridEnd.setDate(gridEnd.getDate() + endOffset)
+
+  const rows: ComplianceDay[][] = []
+  const cur = new Date(gridStart)
+
+  while (cur <= gridEnd) {
+    const week: ComplianceDay[] = []
+    for (let i = 0; i < 7; i++) {
+      const key = cur.toISOString().slice(0, 10)
+      week.push(
+        map.get(key) ?? {
+          date: key,
+          daily: null,
+          weekly: null,
+          monthly: null,
+        }
+      )
+      cur.setDate(cur.getDate() + 1)
+    }
+    rows.push(week)
+  }
+
+  const headers = weekStartsOnMonday
+    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+  return { headers, rows }
 }
