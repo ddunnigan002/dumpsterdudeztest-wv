@@ -29,9 +29,9 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
 
       // Fetch vehicle data
       const vehicleResponse = await fetch(`/api/vehicles/${vehicleId}`)
-      if (vehicleResponse.ok) {
-        const vehicleData = await vehicleResponse.json()
-        setVehicle(vehicleData)
+        if (vehicleResponse.ok) {
+          const json = await vehicleResponse.json()
+          setVehicle(json.vehicle ?? json) // supports both shapes
       }
 
       // Fetch maintenance history from driver entries
