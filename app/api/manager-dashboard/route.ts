@@ -31,18 +31,15 @@ export async function GET(req: Request) {
     const dashboard = await getManagerDashboardDataLive({
       supabase,
       franchiseId: profile.franchise_id,
+      managerId, // ✅ pass in explicitly
     })
 
     return NextResponse.json(dashboard)
   } catch (err: any) {
-  console.error("manager-dashboard route error:", err)
-  return NextResponse.json(
-    {
-      error: "Internal server error",
-      detail: err?.message ?? String(err),
-      code: err?.code,
-      hint: err?.hint,
-    },
-    { status: 500 }
-  )
+    console.error("manager-dashboard route error:", err)
+    return NextResponse.json(
+      { error: "Internal server error", detail: err?.message ?? String(err), code: err?.code, hint: err?.hint },
+      { status: 500 }
+    )
+  }
 }
