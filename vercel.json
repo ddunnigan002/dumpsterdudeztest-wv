@@ -1,8 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/checklist-reminders",
-      "schedule": "*/5 * * * *"
+      "path": "/api/cron/checklist-reminders?run=pre_trip",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/checklist-reminders?run=end_day",
+      "schedule": "0 18 * * *"
     }
   ]
 }
