@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/checklist-reminders",
+      "schedule": "*/5 * * * *"
+    }
+  ]
+}
