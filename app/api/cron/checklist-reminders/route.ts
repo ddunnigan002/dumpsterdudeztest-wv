@@ -8,6 +8,10 @@ import { createAdminClient } from "@/lib/supabase/admin"
 type RunType = "pre_trip_9am" | "end_day_6pm"
 
 function isCronAuthorized(req: NextRequest) {
+  // Allow Vercel Cron (internal request)
+  if (req.headers.get("x-vercel-cron") === "1") return true
+
+  // Allow manual/external triggering with a secret
   const secret = process.env.CRON_SECRET
   if (!secret) return false
   const auth = req.headers.get("authorization") || ""
