@@ -5,127 +5,127 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Truck, AlertTriangle, Settings, BarChart3, FileText, Edit3, History, LogOut } from "lucide-react"
+import { ArrowLeft, Truck, AlertTriangle, CheckCircle2, Clock, Wrench, FileText, Settings, LogOut } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import type { ManagerDashboardData } from "@/lib/manager-dashboard-data"
 
-const ManagerDashboard = () => {
+interface Props {
+  userProfile: {
+    id: string
+    full_name: string
+    franchise_id: string
+    role: string
+  }
+}
+
+export default function ManagerDashboard({ userProfile }: Props) {
   const router = useRouter()
-  const [vehicles, setVehicles] = useState([])
-  const [maintenanceAlerts, setMaintenanceAlerts] = useState([])
-  const [recentIssues, setRecentIssues] = useState([])
+  const [data, setData] = useState<ManagerDashboardData | null>(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchVehicles()
+    fetchDashboardData()
   }, [])
 
-  useEffect(() => {
-    if (vehicles.length > 0) {
-      fetchRecentIssues()
-    }
-  }, [vehicles])
-
-  const fetchVehicles = async () => {
+  const fetchDashboardData = async () => {
     try {
-      console.log("[v0] Manager Dashboard: Starting to fetch vehicles")
-      const response = await fetch("/api/vehicles")
-      console.log("[v0] Manager Dashboard: Vehicles API response status:", response.status)
-      if (response.ok) {
-        const data = await response.json()
-        console.log("[v0] Manager Dashboard: Vehicles API returned data:", data)
-        console.log("[v0] Manager Dashboard: Data is array:", Array.isArray(data))
-        console.log("[v0] Manager Dashboard: Data length:", data?.length)
-        const vehiclesArray = data.vehicles || data || []
-        setVehicles(vehiclesArray)
-        console.log("[v0] Manager Dashboard: Vehicles state set to:", vehiclesArray)
-      } else {
-        console.log("[v0] Manager Dashboard: API failed, setting empty vehicles array")
-        setVehicles([])
+      // TODO: Replace with actual API call
+      // const response = await fetch(`/api/manager-dashboard?managerId=${userProfile.id}`)
+      // const data = await response.json()
+
+      // Mock data for now
+      const mockData: ManagerDashboardData = {
+        trucks: [
+          {
+            id: "1",
+            vehicleNumber: "TRUCK-01",
+            name: "Dans Truck",
+            status: "operational",
+            lastEOD: new Date(Date.now() - 1000 * 60 * 60 * 12).toISOString(),
+            openIssuesCount: 0,
+            nextMaintenance: "Oil change in 420 miles",
+          },
+          {
+            id: "2",
+            vehicleNumber: "TRUCK-02",
+            name: "Kenworth",
+            status: "needs-attention",
+            lastEOD: null,
+            openIssuesCount: 2,
+            nextMaintenance: "Tire rotation overdue",
+          },
+        ],
+        actionItems: [
+          {
+            id: "a1",
+            type: "missed-eod",
+            urgency: "high",
+            label: "End of Day Report Missed",
+            truckName: "Kenworth",
+            ageOrDue: "Yesterday",
+            ctaLabel: "Complete EOD",
+            ctaLink: "/vehicle/TRUCK-02/end-day",
+          },
+          {
+            id: "a2",
+            type: "open-issue",
+            urgency: "medium",
+            label: "Check Engine Light",
+            truckName: "Kenworth",
+            ageOrDue: "3 days ago",
+            ctaLabel: "View Issue",
+            ctaLink: "/manager/vehicle/2",
+          },
+          {
+            id: "a3",
+            type: "maintenance-due",
+            urgency: "high",
+            label: "Tire Rotation Overdue",
+            truckName: "Kenworth",
+            ageOrDue: "Due 2 days ago",
+            ctaLabel: "Schedule",
+            ctaLink: "/vehicle/TRUCK-02/schedule-maintenance",
+          },
+        ],
+        complianceCalendar: generateMockCompliance(),
+        maintenanceForecast: [
+          {
+            id: "m1",
+            truckName: "Kenworth",
+            description: "Tire Rotation",
+            dueDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+            category: "overdue",
+          },
+          {
+            id: "m2",
+            truckName: "Dans Truck",
+            description: "Oil Change",
+            dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+            category: "due-7days",
+          },
+          {
+            id: "m3",
+            truckName: "Dans Truck",
+            description: "Brake Inspection",
+            dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString(),
+            category: "due-14days",
+          },
+          {
+            id: "m4",
+            truckName: "Kenworth",
+            description: "Annual Inspection",
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            category: "later",
+          },
+        ],
       }
+
+      setData(mockData)
     } catch (error) {
-      console.error("Error fetching vehicles:", error)
-      console.log("[v0] Manager Dashboard: Error occurred, setting empty vehicles array")
-      setVehicles([])
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
     }
-  }
-
-  const fetchRecentIssues = async () => {
-    try {
-      console.log("[v0] Fetching recent issues for vehicles:", vehicles)
-      const issues = []
-      for (const vehicle of vehicles) {
-        const response = await fetch(`/api/vehicles/${vehicle.vehicle_number || vehicle.id}/issues`)
-        console.log("[v0] Issues API response for", vehicle.vehicle_number, ":", response.status)
-        if (response.ok) {
-          const data = await response.json()
-          console.log("[v0] Issues data:", data)
-          if (Array.isArray(data)) {
-            issues.push(
-              ...data.map((issue) => ({
-                ...issue,
-                vehicleNumber: vehicle.vehicle_number || vehicle.id,
-              })),
-            )
-          }
-        }
-      }
-      console.log("[v0] Total issues found:", issues.length)
-      setRecentIssues(issues.slice(0, 5))
-    } catch (error) {
-      console.error("Error fetching recent issues:", error)
-      setRecentIssues([])
-    }
-  }
-
-  useEffect(() => {
-    const fetchMaintenanceAlerts = async () => {
-      try {
-        console.log("[v0] Fetching maintenance alerts for vehicles:", vehicles)
-        const alerts = []
-        for (const vehicle of vehicles) {
-          const response = await fetch(`/api/vehicles/${vehicle.vehicle_number || vehicle.id}/upcoming-maintenance`)
-          console.log("[v0] Maintenance API response for", vehicle.vehicle_number, ":", response.status)
-          if (response.ok) {
-            const data = await response.json()
-            console.log("[v0] Maintenance data:", data)
-            const maintenanceData = data.upcomingMaintenance || data || []
-            if (Array.isArray(maintenanceData)) {
-              alerts.push(
-                ...maintenanceData.map((item) => ({
-                  id: item.id,
-                  vehicleNumber: vehicle.vehicle_number || vehicle.id,
-                  type: item.maintenance_type || item.maintenanceType,
-                  dueDate: item.due_date || item.dueDate,
-                  dueMileage: item.due_mileage || item.dueMileage,
-                  priority:
-                    (item.due_date || item.dueDate) &&
-                    new Date(item.due_date || item.dueDate) < new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-                      ? "high"
-                      : "medium",
-                  scheduledId: item.id || item.scheduledId,
-                })),
-              )
-            }
-          }
-        }
-        console.log("[v0] Total maintenance alerts found:", alerts.length)
-        setMaintenanceAlerts(alerts)
-      } catch (error) {
-        console.error("Error fetching maintenance alerts:", error)
-        setMaintenanceAlerts([])
-      }
-    }
-
-    if (vehicles.length > 0) {
-      fetchMaintenanceAlerts()
-    }
-  }, [vehicles])
-
-  const handleCompleteMaintenanceClick = (vehicleNumber: string, scheduledId: string) => {
-    router.push(`/vehicle/${vehicleNumber}/enter-maintenance`)
-  }
-
-  const handleScheduleMaintenanceFromIssue = (issueId: string, vehicleNumber: string) => {
-    router.push(`/vehicle/${vehicleNumber}/schedule-maintenance`)
   }
 
   const handleLogout = async () => {
@@ -138,259 +138,433 @@ const ManagerDashboard = () => {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Loading dashboard...</p>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Failed to load dashboard</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-7xl mx-auto space-y-6">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" onClick={() => router.push("/")} className="flex items-center gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Home
-          </Button>
+    <div className="min-h-screen bg-background">
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <img src="/placeholder-a0q0x.png" alt="Dumpster Dudez" className="h-10 w-auto" />
+            <Button variant="ghost" size="sm" onClick={() => router.push("/")} className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Home
+            </Button>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Fleet Management Dashboard</h1>
-              <p className="text-primary font-medium">Dumpster Dudez - Manager View</p>
+              <h1 className="text-2xl font-bold text-foreground">Manager Dashboard</h1>
+              <p className="text-sm text-muted-foreground">Welcome, {userProfile.full_name}</p>
             </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push("/manager/settings")}>
+              <Settings className="h-4 w-4 mr-2" />
+              Settings
+            </Button>
+            <Button variant="ghost" size="sm" onClick={handleLogout}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Logout
+            </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-3">
-            <Card className="border-primary/20 shadow-lg">
-              <CardHeader className="bg-primary/10">
-                <CardTitle className="flex items-center gap-2 text-primary">
-                  <Truck className="h-5 w-5" />
-                  Vehicle Status
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(() => {
-                    console.log("[v0] Manager Dashboard: Rendering vehicles section")
-                    console.log("[v0] Manager Dashboard: vehicles state:", vehicles)
-                    console.log("[v0] Manager Dashboard: vehicles is array:", Array.isArray(vehicles))
-                    console.log("[v0] Manager Dashboard: vehicles length:", vehicles?.length)
-                    return null
-                  })()}
-                  {Array.isArray(vehicles) && vehicles.length > 0 ? (
-                    vehicles.map((vehicle) => {
-                      console.log("[v0] Manager Dashboard: Rendering vehicle:", vehicle.vehicle_number)
-                      return (
-                        <Card
-                          key={vehicle.id}
-                          className="cursor-pointer hover:shadow-md transition-shadow border-border hover:border-primary"
-                          onClick={() => router.push(`/manager/vehicle/${vehicle.id}`)}
-                        >
-                          <CardContent className="p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <h3 className="font-semibold text-lg text-foreground">
-                                  {vehicle.make} {vehicle.model}
-                                </h3>
-                                <p className="text-sm text-muted-foreground">
-                                  {vehicle.vehicle_number} • {vehicle.year}
-                                </p>
-                                <p className="text-sm text-muted-foreground">License: {vehicle.license_plate}</p>
-                              </div>
-                              <Badge
-                                variant={vehicle.status === "active" ? "default" : "secondary"}
-                                className={vehicle.status === "active" ? "bg-primary hover:bg-primary/90" : ""}
-                              >
-                                {vehicle.status}
-                              </Badge>
-                            </div>
-                            <div className="text-sm text-muted-foreground">
-                              Current Mileage: {vehicle.current_mileage?.toLocaleString()} mi
-                            </div>
-                          </CardContent>
-                        </Card>
-                      )
-                    })
-                  ) : (
-                    <div className="col-span-2 text-center py-8 text-muted-foreground">No vehicles found</div>
-                  )}
+        {/* Truck Status Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {data.trucks.map((truck) => (
+            <Card
+              key={truck.id}
+              className="cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => router.push(`/manager/vehicle/${truck.id}`)}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-lg">{truck.name}</h3>
+                    <p className="text-sm text-muted-foreground">{truck.vehicleNumber}</p>
+                  </div>
+                  <Badge
+                    variant={
+                      truck.status === "operational"
+                        ? "default"
+                        : truck.status === "needs-attention"
+                          ? "secondary"
+                          : "destructive"
+                    }
+                  >
+                    {truck.status === "operational"
+                      ? "Operational"
+                      : truck.status === "needs-attention"
+                        ? "Needs Attention"
+                        : "Out of Service"}
+                  </Badge>
+                </div>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Last EOD:</span>
+                    <span className={truck.lastEOD ? "" : "text-destructive font-medium"}>
+                      {truck.lastEOD ? formatRelativeTime(truck.lastEOD) : "Missed"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Open Issues:</span>
+                    <span className={truck.openIssuesCount > 0 ? "text-destructive font-medium" : ""}>
+                      {truck.openIssuesCount}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t">
+                    <p className="text-xs text-muted-foreground">Next Maintenance:</p>
+                    <p className="text-sm font-medium">{truck.nextMaintenance}</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-          </div>
+          ))}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card className="border-primary/20 shadow-lg">
-            <CardHeader className="bg-primary/10">
-              <CardTitle className="flex items-center gap-2 text-primary">
+        {/* Action Needed Section */}
+        {data.actionItems.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5" />
-                Maintenance Alerts
+                Action Needed
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {maintenanceAlerts.length > 0 ? (
-                  maintenanceAlerts.map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
-                    >
+                {data.actionItems.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
+                    <div className="flex items-start gap-3 flex-1">
+                      {item.urgency === "high" ? (
+                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                      ) : item.urgency === "medium" ? (
+                        <Clock className="h-5 w-5 text-amber-500 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="h-5 w-5 text-muted-foreground mt-0.5" />
+                      )}
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant={alert.priority === "high" ? "destructive" : "secondary"}>
-                            {alert.priority === "high" ? "Overdue" : "Due Soon"}
+                        <p className="font-medium">{item.label}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {item.truckName}
                           </Badge>
-                          <span className="font-medium">{alert.vehicleNumber}</span>
+                          <span className="text-xs text-muted-foreground">{item.ageOrDue}</span>
                         </div>
-                        <p className="text-sm text-muted-foreground">{alert.type}</p>
-                        {alert.dueDate && (
-                          <p className="text-xs text-muted-foreground">
-                            Due: {new Date(alert.dueDate).toLocaleDateString()}
-                          </p>
-                        )}
-                        {alert.dueMileage && (
-                          <p className="text-xs text-muted-foreground">Due: {alert.dueMileage.toLocaleString()} mi</p>
-                        )}
                       </div>
-                      <Button
-                        size="sm"
-                        className="bg-primary hover:bg-primary/90"
-                        onClick={() => handleCompleteMaintenanceClick(alert.vehicleNumber, alert.scheduledId)}
-                      >
-                        Complete
-                      </Button>
                     </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">No maintenance alerts</p>
-                )}
+                    <Button size="sm" onClick={() => router.push(item.ctaLink)}>
+                      {item.ctaLabel}
+                    </Button>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>
+        )}
 
-          <Card className="border-primary/20 shadow-lg">
-            <CardHeader className="bg-primary/10">
-              <CardTitle className="flex items-center gap-2 text-primary">
-                <AlertTriangle className="h-5 w-5" />
-                Recent Issues
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {recentIssues.length > 0 ? (
-                  recentIssues.map((issue) => (
-                    <div
-                      key={issue.id}
-                      className="flex items-center justify-between p-3 bg-card rounded-lg border border-border"
-                    >
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className="border-primary text-primary">
-                            {issue.vehicleNumber}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(issue.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-sm text-foreground">{issue.description}</p>
-                        {issue.status && (
-                          <Badge
-                            variant={issue.status === "resolved" ? "default" : "secondary"}
-                            className={issue.status === "resolved" ? "bg-primary hover:bg-primary/90 mt-1" : "mt-1"}
-                          >
-                            {issue.status}
-                          </Badge>
-                        )}
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="border-primary text-primary hover:bg-primary/10 bg-transparent"
-                        onClick={() => handleScheduleMaintenanceFromIssue(issue.id, issue.vehicleNumber)}
-                      >
-                        Schedule Maintenance
-                      </Button>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-muted-foreground text-center py-4">No recent issues</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="border-primary/20 shadow-lg">
-          <CardHeader className="bg-primary/10">
-            <CardTitle className="flex items-center gap-2 text-primary">
-              <Settings className="h-5 w-5" />
-              Quick Actions
+        {/* Compliance Widget */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5" />
+              Compliance (Last 30 Days)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/vehicles")}
-              >
-                <Truck className="h-6 w-6 text-primary" />
-                <span className="text-sm">Manage Vehicles</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/manager/reports/pre-trip")}
-              >
-                <FileText className="h-6 w-6 text-primary" />
-                <span className="text-sm">Pre-Trip Reports</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/manager/reports/gas-analytics")}
-              >
-                <BarChart3 className="h-6 w-6 text-primary" />
-                <span className="text-sm">Gas Analytics</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/manager/data-override")}
-              >
-                <Edit3 className="h-6 w-6 text-primary" />
-                <span className="text-sm">Data Override</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/manager/audit-log")}
-              >
-                <History className="h-6 w-6 text-primary" />
-                <span className="text-sm">Audit Log</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="h-20 flex flex-col items-center gap-2 bg-transparent"
-                onClick={() => router.push("/manager/settings")}
-              >
-                <Settings className="h-6 w-6 text-primary" />
-                <span className="text-sm">Settings</span>
-              </Button>
+            <div className="space-y-4">
+              {/* Daily EOD */}
+              <div>
+                <p className="text-sm font-medium mb-2">Daily End-of-Day</p>
+                <div className="flex gap-1 flex-wrap">
+                  {data.complianceCalendar.map((day) => (
+                    <div
+                      key={day.date}
+                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
+                        day.daily === "completed"
+                          ? "bg-green-500 text-white"
+                          : day.daily === "missed"
+                            ? "bg-red-500 text-white"
+                            : "bg-muted"
+                      }`}
+                      title={`${day.date}: ${day.daily || "N/A"}`}
+                    >
+                      {new Date(day.date).getDate()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weekly Checklist */}
+              <div>
+                <p className="text-sm font-medium mb-2">Weekly Checklist</p>
+                <div className="flex gap-1 flex-wrap">
+                  {data.complianceCalendar.map((day) => (
+                    <div
+                      key={day.date}
+                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
+                        day.weekly === "completed"
+                          ? "bg-green-500 text-white"
+                          : day.weekly === "missed"
+                            ? "bg-red-500 text-white"
+                            : "bg-muted"
+                      }`}
+                      title={`${day.date}: ${day.weekly || "Not due"}`}
+                    >
+                      {new Date(day.date).getDate()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Monthly Checklist */}
+              <div>
+                <p className="text-sm font-medium mb-2">Monthly Checklist</p>
+                <div className="flex gap-1 flex-wrap">
+                  {data.complianceCalendar.map((day) => (
+                    <div
+                      key={day.date}
+                      className={`w-7 h-7 rounded flex items-center justify-center text-xs ${
+                        day.monthly === "completed"
+                          ? "bg-green-500 text-white"
+                          : day.monthly === "missed"
+                            ? "bg-red-500 text-white"
+                            : "bg-muted"
+                      }`}
+                      title={`${day.date}: ${day.monthly || "Not due"}`}
+                    >
+                      {new Date(day.date).getDate()}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Legend */}
+              <div className="flex items-center gap-4 pt-2 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-green-500 rounded"></div>
+                  <span>Completed</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-red-500 rounded"></div>
+                  <span>Missed</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 bg-muted rounded"></div>
+                  <span>Not Due</span>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>
 
-        <div className="flex justify-center pb-6">
-          <Button
-            variant="outline"
-            className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground bg-transparent"
-            onClick={handleLogout}
-          >
-            <LogOut className="h-4 w-4" />
-            Logout
-          </Button>
-        </div>
+        {/* Maintenance Forecast */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Wrench className="h-5 w-5" />
+              Maintenance Forecast (Next 45 Days)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Overdue */}
+              {data.maintenanceForecast.filter((m) => m.category === "overdue").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                    <p className="text-sm font-medium text-destructive">Overdue</p>
+                  </div>
+                  <div className="space-y-2 pl-5">
+                    {data.maintenanceForecast
+                      .filter((m) => m.category === "overdue")
+                      .map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
+                          <div>
+                            <p className="text-sm font-medium">{item.description}</p>
+                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due < 7 days */}
+              {data.maintenanceForecast.filter((m) => m.category === "due-7days").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 bg-amber-500 rounded-full"></div>
+                    <p className="text-sm font-medium text-amber-600">Due within 7 days</p>
+                  </div>
+                  <div className="space-y-2 pl-5">
+                    {data.maintenanceForecast
+                      .filter((m) => m.category === "due-7days")
+                      .map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-2 bg-amber-50 rounded">
+                          <div>
+                            <p className="text-sm font-medium">{item.description}</p>
+                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Due < 14 days */}
+              {data.maintenanceForecast.filter((m) => m.category === "due-14days").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                    <p className="text-sm font-medium text-blue-600">Due within 14 days</p>
+                  </div>
+                  <div className="space-y-2 pl-5">
+                    {data.maintenanceForecast
+                      .filter((m) => m.category === "due-14days")
+                      .map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-2 bg-blue-50 rounded">
+                          <div>
+                            <p className="text-sm font-medium">{item.description}</p>
+                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Later */}
+              {data.maintenanceForecast.filter((m) => m.category === "later").length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-3 h-3 bg-gray-400 rounded-full"></div>
+                    <p className="text-sm font-medium text-muted-foreground">Later (14+ days)</p>
+                  </div>
+                  <div className="space-y-2 pl-5">
+                    {data.maintenanceForecast
+                      .filter((m) => m.category === "later")
+                      .map((item) => (
+                        <div key={item.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+                          <div>
+                            <p className="text-sm font-medium">{item.description}</p>
+                            <p className="text-xs text-muted-foreground">{item.truckName}</p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Links */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Links</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col gap-2 bg-transparent"
+                onClick={() => router.push("/vehicles")}
+              >
+                <Truck className="h-5 w-5" />
+                <span className="text-xs">Manage Vehicles</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col gap-2 bg-transparent"
+                onClick={() => router.push("/manager/reports/pre-trip")}
+              >
+                <FileText className="h-5 w-5" />
+                <span className="text-xs">Pre-Trip Reports</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col gap-2 bg-transparent"
+                onClick={() => router.push("/manager/reports/gas-analytics")}
+              >
+                <FileText className="h-5 w-5" />
+                <span className="text-xs">Gas Analytics</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col gap-2 bg-transparent"
+                onClick={() => router.push("/manager/data-override")}
+              >
+                <FileText className="h-5 w-5" />
+                <span className="text-xs">Data Override</span>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
 }
 
-export default ManagerDashboard
+function formatRelativeTime(isoDate: string): string {
+  const date = new Date(isoDate)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+
+  if (diffHours < 24) {
+    return `${diffHours} hours ago`
+  }
+  const diffDays = Math.floor(diffHours / 24)
+  return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`
+}
+
+function formatDate(isoDate: string): string {
+  return new Date(isoDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+}
+
+function generateMockCompliance() {
+  const calendar = []
+  const today = new Date()
+  for (let i = 29; i >= 0; i--) {
+    const date = new Date(today)
+    date.setDate(date.getDate() - i)
+    const dateStr = date.toISOString().split("T")[0]
+
+    const dailyStatus = Math.random() > 0.15 ? "completed" : "missed"
+    const weeklyStatus = date.getDay() === 1 ? (Math.random() > 0.2 ? "completed" : "missed") : null
+    const monthlyStatus = date.getDate() === 1 ? "completed" : null
+
+    calendar.push({
+      date: dateStr,
+      daily: dailyStatus,
+      weekly: weeklyStatus,
+      monthly: monthlyStatus,
+    })
+  }
+  return calendar
+}
