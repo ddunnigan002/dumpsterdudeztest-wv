@@ -74,9 +74,11 @@ export async function GET(req: NextRequest) {
     const runDate = todayInTz(tz)
 
     const runType =
-      hm === "09:00" ? "pre_trip_9am" :
-      hm === "18:00" ? "end_day_6pm" :
-      null
+      forcedRun === "pre_trip"
+        ? "pre_trip_9am"
+        : forcedRun === "end_day"
+        ? "end_day_6pm"
+        : null
 
     if (!runType) continue
 
@@ -193,4 +195,5 @@ export async function GET(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, results })
+
 }
