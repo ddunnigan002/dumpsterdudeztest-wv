@@ -37,6 +37,9 @@ function hourMinuteInTz(timeZone: string) {
 }
 
 export async function GET(req: NextRequest) {
+  const url = new URL(req.url)
+  const forcedRun = url.searchParams.get("run") // "pre_trip" | "end_day" | null
+  
   if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
@@ -70,8 +73,8 @@ export async function GET(req: NextRequest) {
     const franchiseName = (f.name as string) || franchiseId
     const tz = (f.timezone as string) || "America/New_York"
 
-    const hm = hourMinuteInTz(tz)
-    const runDate = todayInTz(tz)
+    const url = new URL(req.url)
+    const forcedRun = url.searchParams.get("run")
 
     const runType =
       forcedRun === "pre_trip"
