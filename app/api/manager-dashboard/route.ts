@@ -12,7 +12,7 @@ export async function GET(req: Request) {
     } = await supabase.auth.getUser()
 
     if (userErr || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized", detail: userErr?.message }, { status: 401 })
     }
 
     const url = new URL(req.url)
@@ -25,7 +25,7 @@ export async function GET(req: Request) {
       .single()
 
     if (profileErr || !profile) {
-      return NextResponse.json({ error: "Profile not found" }, { status: 404 })
+      return NextResponse.json({ error: "Profile not found", detail: profileErr?.message }, { status: 404 })
     }
 
     const dashboard = await getManagerDashboardDataLive({
@@ -34,8 +34,18 @@ export async function GET(req: Request) {
     })
 
     return NextResponse.json(dashboard)
-  } catch (err) {
+  } catch (err: any) {
+    // THIS is what will tell us exactly what's wrong
     console.error("manager-dashboard route error:", err)
-    return NextResponse.json({ error: "Server error" }, { status: 500 })
+
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        detail: err?.message ?? String(err),
+        hint: err?.hint,
+        code: err?.code,
+      },
+      { status: 500 }
+    )
   }
 }
