@@ -14,7 +14,7 @@ export async function getManagerDashboardDataLive({ supabase, franchiseId }: Arg
     dailyChecklist: "daily_checklists",
     weeklyChecklist: "weekly_checklists",
     monthlyChecklist: "monthly_checklists",
-    maintenance: "maintenance_schedule",
+    maintenance: "scheduled_maintenance",
   } as const
 
   // vehicles has no name; we use vehicle_number for display name
