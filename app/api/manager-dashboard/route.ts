@@ -35,16 +35,9 @@ export async function GET(req: Request) {
 
     return NextResponse.json(dashboard)
   } catch (err: any) {
-    // THIS is what will tell us exactly what's wrong
     console.error("manager-dashboard route error:", err)
-
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        detail: err?.message ?? String(err),
-        hint: err?.hint,
-        code: err?.code,
-      },
+      { error: "Internal server error", detail: err?.message ?? String(err), code: err?.code, hint: err?.hint },
       { status: 500 }
     )
   }
