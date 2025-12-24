@@ -6,65 +6,54 @@ function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4)
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/")
   const rawData = atob(base64)
-  const outputArray = new Uint8Array(rawData.length)
-  for (let i = 0; i < rawData.length; ++i) outputArray[i] = rawData.charCodeAt(i)
-  return outputArray
+  return Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)))
 }
 
-export function EnablePushNotificationsButton() {
+export default function EnablePushNotificationsButton() {
   const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<string>("")
+  const [status, setStatus] = useState<string | null>(null)
 
   const enable = async () => {
     setLoading(true)
-    setStatus("")
+    setStatus(null)
+
     try {
-      if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-        setStatus("Push notifications are not supported in this browser.")
+      if (!("serviceWorker" in navigator)) {
+        setStatus("Push not supported in this browser")
         return
       }
 
-      const perm = await Notification.requestPermission()
-      if (perm !== "granted") {
-        setStatus("Notifications were not allowed.")
+      const registration = await navigator.serviceWorker.register("/sw.js")
+
+      const permission = await Notification.requestPermission()
+      if (permission !== "granted") {
+        setStatus("Notifications were blocked")
         return
       }
 
-      // register/ready
-      await navigator.serviceWorker.register("/sw.js")
-      const reg = await navigator.serviceWorker.ready
-
-      const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
-      if (!vapidPublicKey) {
-        setStatus("Missing VAPID public key.")
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidKey) {
+        setStatus("Missing VAPID key")
         return
       }
 
-      // reuse subscription if present
-      let sub = await reg.pushManager.getSubscription()
-      if (!sub) {
-        sub = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
-        })
-      }
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      })
 
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ subscription: sub }),
+        body: JSON.stringify({ subscription }),
       })
 
-      if (!res.ok) {
-        const text = await res.text()
-        throw new Error(text)
-      }
+      if (!res.ok) throw new Error(await res.text())
 
       setStatus("Notifications enabled ✅")
-    } catch (e: any) {
-      console.error(e)
-      setStatus(`Failed: ${e?.message || "Unknown error"}`)
+    } catch (err: any) {
+      console.error(err)
+      setStatus("Failed to enable notifications")
     } finally {
       setLoading(false)
     }
@@ -75,11 +64,11 @@ export function EnablePushNotificationsButton() {
       <button
         onClick={enable}
         disabled={loading}
-        className="px-4 py-2 rounded bg-orange-500 text-white disabled:opacity-50"
+        className="rounded bg-orange-600 px-4 py-2 text-white disabled:opacity-50"
       >
-        {loading ? "Enabling..." : "Enable Push Notifications"}
+        {loading ? "Enabling…" : "Enable Notifications"}
       </button>
-      {status && <div className="text-sm text-gray-600">{status}</div>}
+      {status && <p className="text-sm text-gray-600">{status}</p>}
     </div>
   )
 }

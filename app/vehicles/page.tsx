@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Edit } from "lucide-react"
 import Link from "next/link"
+import EnablePushNotificationsButton from "@/components/EnablePushNotificationsButton"
+
 
 interface Vehicle {
   id: string
@@ -80,6 +82,17 @@ setVehicles(vehiclesArray)
         </Link>
         <h1 className="text-xl font-bold text-gray-900">Vehicle Management</h1>
       </div>
+      
+      {/* Push notifications */}
+      <Card className="mb-6">
+        <CardContent className="p-4 space-y-2">
+          <div className="font-semibold">Notifications</div>
+          <div className="text-sm text-gray-600">
+            Enable push notifications on this device to receive checklist reminders.
+          </div>
+          <EnablePushNotificationsButton />
+        </CardContent>
+      </Card>
 
       {Array.isArray(vehicles) && vehicles.length > 0 ? (
         vehicles.map((vehicle) => (
