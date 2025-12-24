@@ -37,7 +37,7 @@ export const metadata: Metadata = {
     initialScale: 1,
     userScalable: false,
   },
-  manifest: "/manifest.json",
+  manifest: "/manifest.webmanifest",
 }
 
 export default function RootLayout({
@@ -48,8 +48,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${geist.variable} ${manrope.variable} antialiased`}>
       <head>
-        <link rel="apple-touch-icon" href="/images/dumpster-dudez-logo.svg" />
-        <link rel="shortcut icon" href="/images/dumpster-dudez-logo.svg" />
+        <link rel="apple-touch-icon" href="/new-dd-logo.png" />
+        <link rel="icon" type="image/png" href="/new-dd-logo.png" />
       </head>
       <body>
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
