@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Settings, BarChart3 } from "lucide-react"
+import { Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -37,12 +37,6 @@ export default function Home() {
           <div className="flex items-center">
             <Image src="/dumpster-dudez-logo.svg" alt="Dumpster Dudez" width={160} height={50} className="h-8 w-auto" />
           </div>
-          <Link href="/manager">
-            <Button variant="outline" size="sm" className="border-border text-foreground hover:bg-muted bg-transparent">
-              <Settings className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">Manager</span>
-            </Button>
-          </Link>
         </div>
       </header>
 
@@ -104,13 +98,13 @@ export default function Home() {
 
         {vehicles.length > 0 && (
           <div className="mt-8 text-center">
-            <Link href="/manager/reports/gas-analytics">
+            <Link href="/manager">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-medium">
-                <BarChart3 className="h-4 w-4 mr-2" />
-                View Fleet Reports
+                <Settings className="h-4 w-4 mr-2" />
+                Manager Dashboard
               </Button>
             </Link>
-            <p className="text-sm text-muted-foreground mt-2">Analytics & maintenance reports</p>
+            <p className="text-sm text-muted-foreground mt-2">Access reports, settings & analytics</p>
           </div>
         )}
 
