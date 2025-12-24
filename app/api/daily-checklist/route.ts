@@ -6,6 +6,17 @@ import {
   validateVehicleInFranchise,
 } from "@/lib/api/franchise-context"
 
+function decodeMaybe(value: unknown): string {
+  // Handles values like "DANS%20TRUCK" safely
+  const raw = typeof value === "string" ? value : ""
+  try {
+    return decodeURIComponent(raw).trim()
+  } catch {
+    // If it's not valid URI encoding, just return the trimmed raw value
+    return raw.trim()
+  }
+}
+
 export async function GET(request: NextRequest) {
   const ctx = await getActiveFranchiseContext()
   if (isContextError(ctx)) {
@@ -14,12 +25,15 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const vehicleId = searchParams.get("vehicleId")
+    const vehicleIdRaw = searchParams.get("vehicleId")
     const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
 
-    if (!vehicleId) {
+    if (!vehicleIdRaw) {
       return NextResponse.json({ error: "Vehicle ID is required" }, { status: 400 })
     }
+
+    // Defensive: decode in case the caller URL-encoded it
+    const vehicleId = decodeMaybe(vehicleIdRaw)
 
     const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
     if (!vehicle) {
@@ -58,7 +72,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    let body
+    let body: any
     try {
       body = await request.json()
       console.log("🔵 API: Request body parsed:", JSON.stringify(body, null, 2))
@@ -67,10 +81,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
     }
 
-    const { vehicleNumber, checklist, notes, photoUrls } = body
+    const { vehicleNumber, checklist, notes } = body
+
+    // ✅ FIX: decode URL-encoded vehicle numbers (e.g. "DANS%20TRUCK" -> "DANS TRUCK")
+    const decodedVehicleNumber = decodeMaybe(vehicleNumber)
 
     // Validate required fields
-    if (!vehicleNumber) {
+    if (!decodedVehicleNumber) {
       console.error("❌ API: Missing vehicleNumber")
       return NextResponse.json({ error: "Vehicle number is required" }, { status: 400 })
     }
@@ -80,9 +97,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Checklist data is required and must be an array" }, { status: 400 })
     }
 
-    console.log("🔵 API: Looking for vehicle with number:", vehicleNumber.toUpperCase())
+    console.log("🔵 API: Looking for vehicle with number:", decodedVehicleNumber)
 
-    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleNumber)
+    const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, decodedVehicleNumber)
     if (!vehicle) {
       console.error("❌ API: Vehicle not found in franchise")
       return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
@@ -99,9 +116,10 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Building checklist data...")
 
-    const checklistData = {
+    // Build base record
+    const checklistData: Record<string, any> = {
       vehicle_id: vehicle.id,
-      driver_id: ctx.user.id, // Use authenticated user
+      driver_id: ctx.user.id, // authenticated user
       checklist_date: new Date().toISOString().split("T")[0],
       overall_status: checklist.some((item: any) => item.status === "fail")
         ? "fail"
@@ -113,25 +131,21 @@ export async function POST(request: NextRequest) {
 
     console.log("🔵 API: Base checklist data:", JSON.stringify(checklistData, null, 2))
 
-    // Only add database columns that exist and have corresponding frontend items
-    const itemMapping = {
+    // Only map the items that exist in your frontend -> DB columns
+    const itemMapping: Record<string, string> = {
       tires: "tires_condition",
       lights: "lights_working",
       brakes: "brakes_working",
       fluids: "fluid_levels_ok",
     }
 
-    // Map only the items that exist in your frontend
     Object.entries(itemMapping).forEach(([frontendId, dbColumn]) => {
       const status = getItemStatus(frontendId)
       checklistData[dbColumn] = status
       console.log(`🔵 API: Mapped ${frontendId} -> ${dbColumn} = ${status}`)
     })
 
-    // Note: signature_url and created_at will be handled automatically by the database
-
     console.log("🔵 API: Final checklist data:", JSON.stringify(checklistData, null, 2))
-
     console.log("🔵 API: Attempting to upsert to daily_checklists table...")
 
     const { data, error } = await ctx.supabase

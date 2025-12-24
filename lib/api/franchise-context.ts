@@ -95,16 +95,12 @@ export async function validateVehicleInFranchise(
 
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input)
 
-  let query = supabase
-    .from("vehicles")
-    .select("id, vehicle_number, current_mileage")
-    .eq("franchise_id", franchiseId)
+  let query = supabase.from("vehicles").select("id, vehicle_number, current_mileage").eq("franchise_id", franchiseId)
 
   if (isUUID) {
     query = query.eq("id", input)
   } else {
-    // Exact match on normalized vehicle number to avoid accidental partial matches
-    query = query.eq("vehicle_number", input.toUpperCase())
+    query = query.ilike("vehicle_number", `%${input}%`)
   }
 
   const { data, error } = await query.maybeSingle()
