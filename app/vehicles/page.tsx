@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ArrowLeft, Edit } from "lucide-react"
 import Link from "next/link"
-import EnablePushNotificationsButton from "@/components/EnablePushNotificationsButton"
 
 interface Vehicle {
   id: string
@@ -25,7 +24,6 @@ export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [isEditing, setIsEditing] = useState<string | null>(null)
   const [editData, setEditData] = useState<Partial<Vehicle>>({})
-  const [isSendingTest, setIsSendingTest] = useState(false)
 
   useEffect(() => {
     fetchVehicles()
@@ -72,29 +70,6 @@ export default function VehiclesPage() {
     }
   }
 
-  const sendTestPush = async () => {
-    try {
-      setIsSendingTest(true)
-      const res = await fetch("/api/push/test", { method: "POST" })
-      const json = await res.json()
-
-      if (!res.ok) {
-        alert(json?.error || "Failed to send test push")
-        return
-      }
-
-      if (json?.failures?.length) {
-        alert(`Sent: ${json.sent}\nFailures: ${JSON.stringify(json.failures, null, 2)}`)
-      } else {
-        alert(`Sent! (${json.sent}) Check your iPhone.`)
-      }
-    } catch (e: any) {
-      alert(e?.message || "Failed to send test push")
-    } finally {
-      setIsSendingTest(false)
-    }
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="flex items-center gap-3 mb-6">
@@ -105,22 +80,6 @@ export default function VehiclesPage() {
         </Link>
         <h1 className="text-xl font-bold text-gray-900">Vehicle Management</h1>
       </div>
-
-      {/* Push notifications */}
-      <Card className="mb-6">
-        <CardContent className="p-4 space-y-3">
-          <div className="font-semibold">Notifications</div>
-          <div className="text-sm text-gray-600">
-            Enable push notifications on this device to receive checklist reminders.
-          </div>
-
-          <EnablePushNotificationsButton />
-
-          <Button variant="outline" onClick={sendTestPush} disabled={isSendingTest} className="w-full">
-            {isSendingTest ? "Sending test push..." : "Send test push to this device"}
-          </Button>
-        </CardContent>
-      </Card>
 
       {Array.isArray(vehicles) && vehicles.length > 0 ? (
         vehicles.map((vehicle) => (
@@ -171,9 +130,7 @@ export default function VehiclesPage() {
                       <Input
                         type="number"
                         value={editData.current_mileage || ""}
-                        onChange={(e) =>
-                          setEditData({ ...editData, current_mileage: Number.parseInt(e.target.value) })
-                        }
+                        onChange={(e) => setEditData({ ...editData, current_mileage: Number.parseInt(e.target.value) })}
                       />
                     </div>
                     <div>
@@ -185,7 +142,10 @@ export default function VehiclesPage() {
                     </div>
                     <div>
                       <Label>VIN</Label>
-                      <Input value={editData.vin || ""} onChange={(e) => setEditData({ ...editData, vin: e.target.value })} />
+                      <Input
+                        value={editData.vin || ""}
+                        onChange={(e) => setEditData({ ...editData, vin: e.target.value })}
+                      />
                     </div>
                   </div>
                   <div className="flex gap-2">
