@@ -8,8 +8,14 @@ import { sendPushToUser } from "@/lib/push/sendToUser"
 const TZ = "America/New_York"
 
 function requireSecret(req: Request) {
-  const secret = req.headers.get("x-scheduler-secret")
-  return !!secret && secret === process.env.SUPABASE_SCHEDULER_SECRET
+  const headerSecret = req.headers.get("x-scheduler-secret")
+
+  // Allow Vercel Cron (no header, but internal request)
+  const vercelCron = req.headers.get("x-vercel-cron") === "1"
+
+  if (vercelCron) return true
+
+  return !!headerSecret && headerSecret === process.env.SUPABASE_SCHEDULER_SECRET
 }
 
 // Returns { ymd: "YYYY-MM-DD", dow: 0..6 } in America/New_York
