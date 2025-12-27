@@ -20,19 +20,29 @@ interface Props {
 
 export default function ManagerDashboard({ userProfile }: Props) {
   const router = useRouter()
+
   const [data, setData] = useState<ManagerDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    fetchDashboardData()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  // NEW: selected truck filter (all vs specific vehicle id)
+  const [selectedVehicleId, setSelectedVehicleId] = useState("all")
 
-  const fetchDashboardData = async () => {
+  useEffect(() => {
+    fetchDashboardData(selectedVehicleId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedVehicleId])
+
+  const fetchDashboardData = async (vehicleId: string) => {
     try {
       setLoading(true)
 
-      const response = await fetch(`/api/manager-dashboard?managerId=${userProfile.id}`, {
+      const qs = new URLSearchParams()
+      qs.set("managerId", userProfile.id)
+      if (vehicleId && vehicleId !== "all") {
+        qs.set("vehicleId", vehicleId)
+      }
+
+      const response = await fetch(`/api/manager-dashboard?${qs.toString()}`, {
         method: "GET",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
@@ -213,8 +223,24 @@ export default function ManagerDashboard({ userProfile }: Props) {
               Compliance
             </CardTitle>
           </CardHeader>
+
           <CardContent>
-            <ComplianceCalendarGrid days={data.complianceCalendar} weekStartsOnMonday />
+            {/* Prevent calendar from shrinking / misaligning */}
+            <div className="overflow-x-auto">
+              <div className="min-w-[560px]">
+                <ComplianceCalendarGrid
+                  days={data.complianceCalendar}
+                  trucks={data.trucks.map((t) => ({
+                    id: t.id,
+                    name: t.name,
+                    vehicleNumber: t.vehicleNumber,
+                  }))}
+                  selectedVehicleId={selectedVehicleId}
+                  onSelectVehicleId={setSelectedVehicleId}
+                  weekStartsOnMonday
+                />
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -367,15 +393,20 @@ function groupMaintenanceByTruck(items: MaintenanceItem[]) {
   }
   return [...byTruck.entries()].map(([truckName, list]) => ({ truckName, list }))
 }
-
 function ComplianceCalendarGrid({
   days,
+  trucks,
+  selectedVehicleId,
+  onSelectVehicleId,
   weekStartsOnMonday = true,
 }: {
   days: ComplianceDay[]
+  trucks: { id: string; name: string; vehicleNumber: string }[]
+  selectedVehicleId: string
+  onSelectVehicleId: (id: string) => void
   weekStartsOnMonday?: boolean
 }) {
-  const { headers, rows } = buildCalendarGrid(days, weekStartsOnMonday)
+  const { headers, weeks } = buildCalendarGrid(days, weekStartsOnMonday)
 
   const rowDefs = [
     { title: "Daily End-of-Day", key: "daily" as const, hideNonDue: false },
@@ -383,48 +414,87 @@ function ComplianceCalendarGrid({
     { title: "Monthly Checklist", key: "monthly" as const, hideNonDue: true },
   ]
 
-  return (
-    <div className="space-y-5">
-      <p className="text-sm text-muted-foreground">Last ~6 weeks</p>
+  const selectedLabel =
+    selectedVehicleId === "all"
+      ? "All trucks"
+      : trucks.find((t) => t.id === selectedVehicleId)?.name ?? "Selected truck"
 
-      <div className="grid grid-cols-8 gap-1 text-xs text-muted-foreground">
-        <div />
+  return (
+    <div className="space-y-4">
+      {/* Header + filter */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-1">
+          <p className="text-sm font-medium">Last ~6 weeks</p>
+          <p className="text-xs text-muted-foreground">
+            Viewing: <span className="font-medium text-foreground">{selectedLabel}</span>
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-muted-foreground">Truck</label>
+          <select
+            className="h-9 rounded-md border bg-background px-3 text-sm"
+            value={selectedVehicleId}
+            onChange={(e) => onSelectVehicleId(e.target.value)}
+          >
+            <option value="all">All trucks</option>
+            {trucks.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Day headers: EXACTLY 7 columns */}
+      <div className="grid grid-cols-7 gap-1">
         {headers.map((h) => (
-          <div key={h} className="text-center">
+          <div key={h} className="text-center text-xs text-muted-foreground w-7">
             {h}
           </div>
         ))}
       </div>
 
+      {/* Rows */}
       {rowDefs.map((rowDef) => (
-        <div key={rowDef.title} className="grid grid-cols-8 gap-1 items-center">
-          <div className="text-sm font-medium pr-2">{rowDef.title}</div>
+        <div key={rowDef.title} className="space-y-2">
+          <div className="text-sm font-medium">{rowDef.title}</div>
 
-          {rows.flat().map((d) => {
-            const status = d[rowDef.key]
-            const isNonDue = status === null
+          <div className="space-y-1">
+            {weeks.map((week, wi) => (
+              <div key={`${rowDef.key}-week-${wi}`} className="grid grid-cols-7 gap-1">
+                {week.map((d) => {
+                  const status = d[rowDef.key] // "completed" | "missed" | null
+                  const isNonDue = status === null
 
-            if (rowDef.hideNonDue && isNonDue) {
-              return <div key={`${rowDef.key}-${d.date}`} className="w-7 h-7" title={`${d.date}: Not due`} />
-            }
+                  // Keep placeholder so alignment stays perfect
+                  if (rowDef.hideNonDue && isNonDue) {
+                    return <div key={`${rowDef.key}-${d.date}`} className="w-7 h-7" title={`${d.date}: Not due`} />
+                  }
 
-            return (
-              <div key={`${rowDef.key}-${d.date}`} className="w-7 h-7" title={`${d.date}: ${status ?? "N/A"}`}>
-                <div
-                  className={`w-7 h-7 rounded flex items-center justify-center text-[11px] border ${
+                  const cls =
                     status === "completed"
-                      ? "bg-green-500 text-white border-green-600"
+                      ? "bg-green-500 border-green-600"
                       : status === "missed"
-                        ? "bg-red-500 text-white border-red-600"
-                        : "bg-muted text-muted-foreground border-muted"
-                  }`}
-                />
+                        ? "bg-red-500 border-red-600"
+                        : "bg-muted border-muted"
+
+                  return (
+                    <div
+                      key={`${rowDef.key}-${d.date}`}
+                      className={`w-7 h-7 rounded border ${cls}`}
+                      title={`${d.date}: ${status ?? "N/A"}`}
+                    />
+                  )
+                })}
               </div>
-            )
-          })}
+            ))}
+          </div>
         </div>
       ))}
 
+      {/* Legend */}
       <div className="flex items-center gap-4 pt-1 text-xs text-muted-foreground">
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-green-500 rounded border border-green-600" />
@@ -440,30 +510,31 @@ function ComplianceCalendarGrid({
 }
 
 function buildCalendarGrid(days: ComplianceDay[], weekStartsOnMonday: boolean) {
+  const headers = weekStartsOnMonday
+    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
   if (!days || days.length === 0) {
-    return {
-      headers: weekStartsOnMonday ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-      rows: [] as ComplianceDay[][],
-    }
+    return { headers, weeks: [] as ComplianceDay[][] }
   }
 
   const sorted = [...days].sort((a, b) => a.date.localeCompare(b.date))
-  const map = new Map(sorted.map((d) => [d.date, d]))
+  const map = new Map(sorted.map((d) => [d.date, d] as const))
 
   const start = new Date(sorted[0].date + "T00:00:00")
   const end = new Date(sorted[sorted.length - 1].date + "T00:00:00")
 
-  const startDay = start.getDay()
-  const startOffset = weekStartsOnMonday ? (startDay === 0 ? 6 : startDay - 1) : startDay
+  const startDow = start.getDay() // 0..6 (Sun..Sat)
+  const startOffset = weekStartsOnMonday ? (startDow === 0 ? 6 : startDow - 1) : startDow
   const gridStart = new Date(start)
   gridStart.setDate(gridStart.getDate() - startOffset)
 
-  const endDay = end.getDay()
-  const endOffset = weekStartsOnMonday ? (endDay === 0 ? 0 : 7 - endDay) : 6 - endDay
+  const endDow = end.getDay()
+  const endOffset = weekStartsOnMonday ? (endDow === 0 ? 0 : 7 - endDow) : 6 - endDow
   const gridEnd = new Date(end)
   gridEnd.setDate(gridEnd.getDate() + endOffset)
 
-  const rows: ComplianceDay[][] = []
+  const weeks: ComplianceDay[][] = []
   const cur = new Date(gridStart)
 
   while (cur <= gridEnd) {
@@ -480,12 +551,8 @@ function buildCalendarGrid(days: ComplianceDay[], weekStartsOnMonday: boolean) {
       )
       cur.setDate(cur.getDate() + 1)
     }
-    rows.push(week)
+    weeks.push(week)
   }
 
-  const headers = weekStartsOnMonday
-    ? ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-    : ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
-
-  return { headers, rows }
+  return { headers, weeks }
 }

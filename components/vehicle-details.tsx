@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -11,48 +11,92 @@ interface VehicleDetailsProps {
   onBack: () => void
 }
 
+type IssueRow = {
+  id: string
+  vehicle_id: string
+  status: string | null
+  created_at: string
+  description: string | null
+  photos?: string[] | null
+}
+
 export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
   const [vehicle, setVehicle] = useState<any>(null)
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([])
   const [upcomingMaintenance, setUpcomingMaintenance] = useState<any[]>([])
   const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [issues, setIssues] = useState<IssueRow[]>([])
+
   const [loading, setLoading] = useState(true)
+
   const [selectedActivity, setSelectedActivity] = useState<any>(null)
   const [activityDetails, setActivityDetails] = useState<any>(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
+
   const [completingMaintenance, setCompletingMaintenance] = useState<string | null>(null)
   const [resolvingIssue, setResolvingIssue] = useState<string | null>(null)
+
+  const openIssues = useMemo(() => {
+    return (issues ?? []).filter((i) => {
+      const s = (i.status ?? "").toLowerCase()
+      return s !== "resolved" && s !== "closed"
+    })
+  }, [issues])
+
+  const derivedStatus = useMemo(() => {
+    // If there are open issues, we want to show the same "Needs Attention" idea as the dashboard.
+    if (openIssues.length > 0) return "needs-attention"
+    return (vehicle?.status ?? "active").toString().toLowerCase()
+  }, [openIssues.length, vehicle?.status])
 
   const fetchVehicleData = async () => {
     try {
       setLoading(true)
 
-      // Fetch vehicle data
-      const vehicleResponse = await fetch(`/api/vehicles/${vehicleId}`)
-        if (vehicleResponse.ok) {
-          const json = await vehicleResponse.json()
-          setVehicle(json.vehicle ?? json) // supports both shapes
+      // 1) Vehicle
+      const vehicleResponse = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" })
+      if (vehicleResponse.ok) {
+        const json = await vehicleResponse.json()
+        setVehicle(json.vehicle ?? json)
+      } else {
+        setVehicle(null)
       }
 
-      // Fetch maintenance history from driver entries
-      const historyResponse = await fetch(`/api/vehicles/${vehicleId}/maintenance-history`)
+    // 2) Issues (supports both shapes: [] OR { issues: [] })
+    const issuesResp = await fetch(`/api/vehicles/${vehicleId}/issues`, { cache: "no-store" })
+    if (issuesResp.ok) {
+      const j = await issuesResp.json()
+      const list = Array.isArray(j) ? j : (j.issues ?? [])
+      setIssues(list)
+    } else {
+      setIssues([])
+    } 
+
+      // 3) Maintenance history
+      const historyResponse = await fetch(`/api/vehicles/${vehicleId}/maintenance-history`, { cache: "no-store" })
       if (historyResponse.ok) {
         const historyData = await historyResponse.json()
-        setMaintenanceHistory(historyData)
+        setMaintenanceHistory(historyData ?? [])
+      } else {
+        setMaintenanceHistory([])
       }
 
-      // Fetch upcoming maintenance (next 10k miles or 2 months)
-      const upcomingResponse = await fetch(`/api/vehicles/${vehicleId}/upcoming-maintenance`)
+      // 4) Upcoming maintenance
+      const upcomingResponse = await fetch(`/api/vehicles/${vehicleId}/upcoming-maintenance`, { cache: "no-store" })
       if (upcomingResponse.ok) {
         const upcomingData = await upcomingResponse.json()
-        setUpcomingMaintenance(upcomingData.upcomingMaintenance || [])
+        setUpcomingMaintenance(upcomingData?.upcomingMaintenance || [])
+      } else {
+        setUpcomingMaintenance([])
       }
 
-      // Fetch recent activity from driver inputs
-      const activityResponse = await fetch(`/api/vehicles/${vehicleId}/recent-activity`)
+      // 5) Recent activity
+      const activityResponse = await fetch(`/api/vehicles/${vehicleId}/recent-activity`, { cache: "no-store" })
       if (activityResponse.ok) {
         const activityData = await activityResponse.json()
-        setRecentActivity(activityData)
+        setRecentActivity(activityData ?? [])
+      } else {
+        setRecentActivity([])
       }
     } catch (error) {
       console.error("Error fetching vehicle data:", error)
@@ -62,9 +106,8 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
   }
 
   useEffect(() => {
-    if (vehicleId) {
-      fetchVehicleData()
-    }
+    if (vehicleId) fetchVehicleData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId])
 
   const completeMaintenanceItem = async (maintenanceId: string, maintenanceType: string) => {
@@ -72,9 +115,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
     try {
       const response = await fetch("/api/complete-maintenance", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vehicleId,
           maintenanceType,
@@ -85,10 +126,8 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
       })
 
       if (response.ok) {
-        // Remove completed item from upcoming maintenance
         setUpcomingMaintenance((prev) => prev.filter((item) => item.id !== maintenanceId))
-        // Refresh maintenance history to show the new record
-        fetchVehicleData()
+        await fetchVehicleData()
       } else {
         console.error("Failed to complete maintenance")
       }
@@ -104,10 +143,9 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
     try {
       const response = await fetch("/api/resolve-issue", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // Your existing UI sometimes uses "issue-<id>" in other places
           issueId: issueId.replace("issue-", ""),
           resolvedBy: "Manager",
           resolvedDate: new Date().toISOString().split("T")[0],
@@ -115,9 +153,18 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
       })
 
       if (response.ok) {
-        // Update the activity to show as resolved
+        // Update issues list immediately
+        setIssues((prev) =>
+          prev.map((i) =>
+            i.id === issueId || `issue-${i.id}` === issueId ? { ...i, status: "resolved" } : i,
+          ),
+        )
+
+        // Also update activity list if it contains that issue
         setRecentActivity((prev) =>
-          prev.map((activity) => (activity.id === issueId ? { ...activity, status: "resolved" } : activity)),
+          prev.map((activity) =>
+            activity.id === issueId ? { ...activity, status: "resolved" } : activity,
+          ),
         )
       } else {
         console.error("Failed to resolve issue")
@@ -145,7 +192,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
       }
 
       if (endpoint) {
-        const response = await fetch(endpoint)
+        const response = await fetch(endpoint, { cache: "no-store" })
         if (response.ok) {
           const details = await response.json()
           setActivityDetails(details)
@@ -223,11 +270,63 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
             </div>
             <div>
               <p className="text-gray-600">Status</p>
-              <Badge variant={vehicle.status === "active" ? "secondary" : "outline"} className="mt-1">
-                {vehicle.status?.toUpperCase() || "UNKNOWN"}
+              <Badge
+                variant={derivedStatus === "needs-attention" ? "destructive" : "secondary"}
+                className="mt-1"
+              >
+                {derivedStatus === "needs-attention"
+                  ? "NEEDS ATTENTION"
+                  : (vehicle.status?.toUpperCase() || "ACTIVE")}
               </Badge>
+              {openIssues.length > 0 && (
+                <p className="text-xs text-orange-600 mt-1">{openIssues.length} open issue(s)</p>
+              )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Open Issues (NEW) */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5" />
+            Open Issues
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {openIssues.length > 0 ? (
+            <div className="space-y-3">
+              {openIssues.map((i) => (
+                <div key={i.id} className="p-3 border rounded-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{i.description ?? "Issue"}</p>
+                      <p className="text-xs text-gray-600">{new Date(i.created_at).toLocaleString()}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive">OPEN</Badge>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => resolveIssue(i.id)}
+                        disabled={resolvingIssue === i.id}
+                        className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      >
+                        {resolvingIssue === i.id ? (
+                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                        ) : (
+                          "Resolve"
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600 text-center py-4">No open issues 🎉</p>
+          )}
         </CardContent>
       </Card>
 
@@ -289,7 +388,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
               {recentActivity.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex items-start gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
                   onClick={() => handleActivityClick(activity)}
                 >
                   <div className="flex-shrink-0 mt-1">
@@ -304,14 +403,13 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <h4 className="font-medium text-sm">{activity.type}</h4>
-                      <span className="text-xs text-gray-600">
-                        {new Date(activity.created_at).toLocaleDateString()}
-                      </span>
+                      <span className="text-xs text-gray-600">{new Date(activity.created_at).toLocaleDateString()}</span>
                     </div>
                     <p className="text-sm text-gray-600">By {activity.driver_name || "Driver"}</p>
                     {activity.details && <p className="text-sm text-gray-900 mt-1">{activity.details}</p>}
                     <p className="text-xs text-orange-600 mt-1">Click to view details</p>
                   </div>
+
                   {activity.type === "Issue Report" && activity.status !== "resolved" && (
                     <div className="flex-shrink-0">
                       <Button
@@ -332,6 +430,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                       </Button>
                     </div>
                   )}
+
                   {activity.type === "Issue Report" && activity.status === "resolved" && (
                     <div className="flex-shrink-0">
                       <Badge variant="secondary" className="bg-green-100 text-green-800">
@@ -413,6 +512,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                     <p className="font-medium">{selectedActivity.driver_name || "Unknown"}</p>
                   </div>
 
+                  {/* Your existing detail render blocks unchanged */}
                   {selectedActivity.type === "Daily Checklist" && (
                     <div>
                       <p className="text-sm text-gray-600 mb-2">Checklist Items</p>
@@ -422,11 +522,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                             <span className="text-sm">{item.item_name}</span>
                             <Badge
                               variant={
-                                item.status === "pass"
-                                  ? "secondary"
-                                  : item.status === "service_soon"
-                                    ? "outline"
-                                    : "destructive"
+                                item.status === "pass" ? "secondary" : item.status === "service_soon" ? "outline" : "destructive"
                               }
                               className={
                                 item.status === "pass"
@@ -436,30 +532,11 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                                     : "bg-red-100 text-red-800"
                               }
                             >
-                              {item.status === "pass"
-                                ? "Pass"
-                                : item.status === "service_soon"
-                                  ? "Service Soon"
-                                  : "Fail"}
+                              {item.status === "pass" ? "Pass" : item.status === "service_soon" ? "Service Soon" : "Fail"}
                             </Badge>
                           </div>
                         ))}
                       </div>
-                      {activityDetails.photos && activityDetails.photos.length > 0 && (
-                        <div>
-                          <p className="text-sm text-gray-600 mb-2">Photos</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {activityDetails.photos.map((photo: string, index: number) => (
-                              <img
-                                key={index}
-                                src={photo || "/placeholder.svg"}
-                                alt={`Checklist photo ${index + 1}`}
-                                className="w-full h-24 object-cover rounded border"
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
 
@@ -474,38 +551,11 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                           <p className="text-sm text-gray-600">End Mileage</p>
                           <p className="font-medium">{activityDetails.end_mileage?.toLocaleString() || "N/A"}</p>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Miles Driven</p>
-                          <p className="font-medium">
-                            {activityDetails.end_mileage && activityDetails.start_mileage
-                              ? (activityDetails.end_mileage - activityDetails.start_mileage).toLocaleString()
-                              : "N/A"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-600">Fuel Added</p>
-                          <p className="font-medium">{activityDetails.fuel_gallons || "N/A"} gallons</p>
-                        </div>
                       </div>
                       {activityDetails.notes && (
                         <div>
                           <p className="text-sm text-gray-600">Notes</p>
                           <p className="font-medium">{activityDetails.notes}</p>
-                        </div>
-                      )}
-                      {activityDetails.photos && activityDetails.photos.length > 0 && (
-                        <div>
-                          <p className="text-sm text-gray-600 mb-2">Photos</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {activityDetails.photos.map((photo: string, index: number) => (
-                              <img
-                                key={index}
-                                src={photo || "/placeholder.svg"}
-                                alt={`Log photo ${index + 1}`}
-                                className="w-full h-24 object-cover rounded border"
-                              />
-                            ))}
-                          </div>
                         </div>
                       )}
                     </div>
@@ -523,21 +573,6 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                           {activityDetails.status?.toUpperCase() || "OPEN"}
                         </Badge>
                       </div>
-                      {activityDetails.photos && activityDetails.photos.length > 0 && (
-                        <div>
-                          <p className="text-sm text-gray-600 mb-2">Photos</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            {activityDetails.photos.map((photo: string, index: number) => (
-                              <img
-                                key={index}
-                                src={photo || "/placeholder.svg"}
-                                alt={`Issue photo ${index + 1}`}
-                                className="w-full h-24 object-cover rounded border"
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>

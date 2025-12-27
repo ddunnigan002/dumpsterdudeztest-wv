@@ -6,7 +6,7 @@ export async function GET(req: Request) {
   try {
     const supabase = await createClient()
 
-    // 1) Authenticated user (secure)
+    // 1) Authenticated user
     const {
       data: { user },
       error: userErr,
@@ -21,9 +21,10 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const managerId = url.searchParams.get("managerId") || user.id
+    const vehicleId = url.searchParams.get("vehicleId") // NEW
 
-    // 2) Ensure a row exists in public.users (your table has NOT NULL email)
-    // We upsert to avoid "0 rows" errors AND keep email synced.
+
+    // 2) Email required for public.users NOT NULL
     const email = user.email ?? user.user_metadata?.email ?? null
     if (!email) {
       return NextResponse.json(
@@ -42,38 +43,50 @@ export async function GET(req: Request) {
       user.email ??
       "User"
 
-    // NOTE: franchise_id is required for dashboard queries.
-    // If you don't know it yet at signup, you can set it later.
-    // We'll only set franchise_id on upsert IF it already exists (to avoid overwriting).
-    // So first try to read existing.
-    const { data: existingProfile, error: readErr } = await supabase
-      .from("users")
-      .select("id, franchise_id, role, full_name, email")
-      .eq("id", managerId)
+    // 3) Determine franchise + role from franchise_memberships (canonical)
+    const { data: membership, error: membershipErr } = await supabase
+      .from("franchise_memberships")
+      .select("franchise_id, role, is_active")
+      .eq("user_id", managerId)
+      .eq("is_active", true)
       .maybeSingle()
 
-    if (readErr) {
+    if (membershipErr) {
       return NextResponse.json(
-        { error: "Failed to read users profile", detail: readErr.message, code: readErr.code },
+        { error: "Failed to read franchise membership", detail: membershipErr.message, code: membershipErr.code },
         { status: 500 }
       )
     }
 
-    // Build upsert payload
-    const upsertPayload: any = {
-      id: managerId,
-      email, // NOT NULL in your schema
-      full_name: existingProfile?.full_name ?? fullName,
-      role: existingProfile?.role ?? "manager",
-      // DON'T overwrite franchise_id if it exists
-      franchise_id: existingProfile?.franchise_id ?? null,
+    if (!membership?.franchise_id) {
+      return NextResponse.json(
+        {
+          error: "No active franchise membership",
+          detail:
+            "This user has no active franchise membership. Create a franchise_memberships row for this user_id (role=manager).",
+          user_id: managerId,
+          email,
+        },
+        { status: 403 }
+      )
     }
 
-    const { data: upserted, error: upsertErr } = await supabase
-      .from("users")
-      .upsert(upsertPayload, { onConflict: "id" })
-      .select("id, franchise_id, role, full_name, email")
-      .single()
+    const franchiseId = membership.franchise_id as string
+    const role = membership.role ?? "manager"
+
+    // 4) Keep legacy public.users row in sync (optional compatibility layer)
+    //    We DO set franchise_id here because membership is authoritative.
+    const { error: upsertErr } = await supabase.from("users").upsert(
+      {
+        id: managerId,
+        email,
+        full_name: fullName,
+        role,
+        franchise_id: franchiseId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    )
 
     if (upsertErr) {
       return NextResponse.json(
@@ -82,25 +95,13 @@ export async function GET(req: Request) {
       )
     }
 
-    // 3) You MUST have a franchise_id to load manager dashboard
-    if (!upserted.franchise_id) {
-      return NextResponse.json(
-        {
-          error: "Profile missing franchise_id",
-          detail:
-            "Your public.users row exists now, but franchise_id is null. Set users.franchise_id for this manager (and create vehicle_assignments).",
-          user_id: managerId,
-          email: upserted.email,
-        },
-        { status: 400 }
-      )
-    }
-
-    // 4) Fetch live dashboard data
+    // 5) Fetch live dashboard data
     const dashboard = await getManagerDashboardDataLive({
       supabase,
-      franchiseId: upserted.franchise_id,
+      franchiseId,
       managerId,
+      role,
+      vehicleId,
     })
 
     return NextResponse.json(dashboard)
