@@ -25,25 +25,55 @@ async function getActiveFranchiseContext() {
   return { supabase, user, franchiseId: membership.franchise_id as string }
 }
 
+async function getFranchiseName(supabase: any, franchiseId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("franchises")
+      .select("name")
+      .eq("id", franchiseId)
+      .maybeSingle()
+
+    if (error) {
+      console.error("[vehicles] franchise name lookup error:", error)
+      return null
+    }
+
+    return data?.name ?? null
+  } catch (e) {
+    console.error("[vehicles] franchise name lookup exception:", e)
+    return null
+  }
+}
+
 export async function GET() {
   try {
     const ctx = await getActiveFranchiseContext()
-    if ("error" in ctx) return NextResponse.json({ error: ctx.error, vehicles: [] }, { status: ctx.status })
+    if ("error" in ctx) {
+      return NextResponse.json(
+        { error: ctx.error, franchiseName: null, vehicles: [] },
+        { status: ctx.status },
+      )
+    }
 
     const { supabase, franchiseId } = ctx
 
-    const { data, error } = await supabase
-      .from("vehicles")
-      .select("*")
-      .eq("franchise_id", franchiseId)
-      .order("created_at", { ascending: false })
+    const [franchiseName, vehiclesRes] = await Promise.all([
+      getFranchiseName(supabase, franchiseId),
+      supabase.from("vehicles").select("*").eq("franchise_id", franchiseId).order("created_at", { ascending: false }),
+    ])
 
-    if (error) throw error
+    if (vehiclesRes.error) throw vehiclesRes.error
 
-    return NextResponse.json({ vehicles: data ?? [] })
+    return NextResponse.json({
+      franchiseName,
+      vehicles: vehiclesRes.data ?? [],
+    })
   } catch (error) {
     console.error("[vehicles GET] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch vehicles", vehicles: [] }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to fetch vehicles", franchiseName: null, vehicles: [] },
+      { status: 500 },
+    )
   }
 }
 
@@ -65,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     const payload = {
-      franchise_id: franchiseId, // ✅ ALWAYS set from membership
+      franchise_id: franchiseId,
       vehicle_number,
       make,
       model,

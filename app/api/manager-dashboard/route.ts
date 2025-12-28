@@ -2,6 +2,26 @@ import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { getManagerDashboardDataLive } from "@/lib/manager-dashboard-live"
 
+async function getFranchiseName(supabase: any, franchiseId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("franchises")
+      .select("name")
+      .eq("id", franchiseId)
+      .maybeSingle()
+
+    if (error) {
+      console.error("[manager-dashboard] franchise name lookup error:", error)
+      return null
+    }
+
+    return data?.name ?? null
+  } catch (e) {
+    console.error("[manager-dashboard] franchise name lookup exception:", e)
+    return null
+  }
+}
+
 export async function GET(req: Request) {
   try {
     const supabase = await createClient()
@@ -13,7 +33,7 @@ export async function GET(req: Request) {
     if (userErr || !user) {
       return NextResponse.json(
         { error: "Unauthorized", detail: userErr?.message ?? "No user session" },
-        { status: 401 }
+        { status: 401 },
       )
     }
 
@@ -29,7 +49,7 @@ export async function GET(req: Request) {
           error: "Missing email on auth user",
           detail: "Supabase auth user.email is null, but public.users.email is NOT NULL.",
         },
-        { status: 400 }
+        { status: 400 },
       )
     }
 
@@ -51,7 +71,7 @@ export async function GET(req: Request) {
     if (membershipErr) {
       return NextResponse.json(
         { error: "Failed to read franchise membership", detail: membershipErr.message, code: membershipErr.code },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
@@ -64,7 +84,7 @@ export async function GET(req: Request) {
           user_id: managerId,
           email,
         },
-        { status: 403 }
+        { status: 403 },
       )
     }
 
@@ -72,37 +92,42 @@ export async function GET(req: Request) {
     const role = membership.role ?? "manager"
 
     // 4) Keep legacy public.users row in sync (compat layer)
-    const { error: upsertErr } = await supabase
-      .from("users")
-      .upsert(
-        {
-          id: managerId,
-          email,
-          full_name: fullName,
-          role,
-          franchise_id: franchiseId,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      )
+    const { error: upsertErr } = await supabase.from("users").upsert(
+      {
+        id: managerId,
+        email,
+        full_name: fullName,
+        role,
+        franchise_id: franchiseId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    )
 
     if (upsertErr) {
       return NextResponse.json(
         { error: "Failed to upsert users profile", detail: upsertErr.message, code: upsertErr.code },
-        { status: 500 }
+        { status: 500 },
       )
     }
 
-    // 5) Fetch live dashboard data (this is where we’ll build per-vehicle action items)
-    const dashboard = await getManagerDashboardDataLive({
-      supabase,
-      franchiseId,
-      managerId,
-      role,
-      vehicleId,
-    })
+    // 5) Fetch live dashboard data + franchise name in parallel
+    const [dashboard, franchiseName] = await Promise.all([
+      getManagerDashboardDataLive({
+        supabase,
+        franchiseId,
+        managerId,
+        role,
+        vehicleId,
+      }),
+      getFranchiseName(supabase, franchiseId),
+    ])
 
-    return NextResponse.json(dashboard)
+    // 6) Return dashboard + franchiseName (non-breaking additive field)
+    return NextResponse.json({
+      franchiseName,
+      ...dashboard,
+    })
   } catch (err: any) {
     console.error("manager-dashboard route error:", err)
     return NextResponse.json(
@@ -112,7 +137,7 @@ export async function GET(req: Request) {
         code: err?.code,
         hint: err?.hint,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }

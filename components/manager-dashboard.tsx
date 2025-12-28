@@ -19,13 +19,17 @@ interface Props {
   }
 }
 
+type DashboardResponse = ManagerDashboardData & {
+  franchiseName?: string | null
+}
+
 export default function ManagerDashboard({ userProfile }: Props) {
   const router = useRouter()
 
   const [data, setData] = useState<ManagerDashboardData | null>(null)
+  const [franchiseName, setFranchiseName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // NEW: selected truck filter (all vs specific vehicle id)
   const [selectedVehicleId, setSelectedVehicleId] = useState("all")
 
   useEffect(() => {
@@ -39,9 +43,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
       const qs = new URLSearchParams()
       qs.set("managerId", userProfile.id)
-      if (vehicleId && vehicleId !== "all") {
-        qs.set("vehicleId", vehicleId)
-      }
+      if (vehicleId && vehicleId !== "all") qs.set("vehicleId", vehicleId)
 
       const response = await fetch(`/api/manager-dashboard?${qs.toString()}`, {
         method: "GET",
@@ -54,8 +56,12 @@ export default function ManagerDashboard({ userProfile }: Props) {
         throw new Error(`Failed to fetch dashboard: ${response.status} ${text}`)
       }
 
-      const liveData: ManagerDashboardData = await response.json()
-      setData(liveData)
+      const liveData: DashboardResponse = await response.json()
+      setFranchiseName(liveData.franchiseName ?? null)
+
+      // Strip franchiseName before storing in data (optional, but keeps types clean)
+      const { franchiseName: _ignored, ...dashboard } = liveData
+      setData(dashboard)
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
       setData(null)
@@ -95,8 +101,10 @@ export default function ManagerDashboard({ userProfile }: Props) {
     )
   }
 
+  const topTitle = franchiseName ? `Dumpster Dudez of ${franchiseName}` : "Dumpster Dudez"
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden">
       <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
@@ -109,11 +117,14 @@ export default function ManagerDashboard({ userProfile }: Props) {
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Home</span>
             </Button>
+
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Manager Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">{topTitle}</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground italic">Manager Dashboard</p>
               <p className="text-xs sm:text-sm text-muted-foreground">Welcome, {userProfile.full_name}</p>
             </div>
           </div>
+
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Button
               variant="outline"
@@ -184,7 +195,6 @@ export default function ManagerDashboard({ userProfile }: Props) {
           ))}
         </div>
 
-        {/* Action Needed Section */}
         {data.actionItems.length > 0 && (
           <Card>
             <CardHeader className="p-4 sm:p-6">
@@ -218,12 +228,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                         </div>
                       </div>
                     </div>
-                    <Button
-                      size="sm"
-                      type="button"
-                      onClick={() => router.push(item.ctaLink)}
-                      className="w-full sm:w-auto shrink-0"
-                    >
+                    <Button size="sm" type="button" onClick={() => router.push(item.ctaLink)} className="w-full sm:w-auto">
                       {item.ctaLabel}
                     </Button>
                   </div>
@@ -243,11 +248,11 @@ export default function ManagerDashboard({ userProfile }: Props) {
           </CardHeader>
 
           <CardContent className="p-4 sm:p-6 pt-0">
+            {/* IMPORTANT: no forced min-width, no horizontal scroll */}
             <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-hidden">
               <ComplianceHeatmapByTruck franchiseId={userProfile.franchise_id} />
             </div>
           </CardContent>
-
         </Card>
 
         {/* Maintenance Forecast */}
@@ -318,35 +323,19 @@ export default function ManagerDashboard({ userProfile }: Props) {
           </CardHeader>
           <CardContent className="p-4 sm:p-6 pt-0">
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
-              <Button
-                variant="outline"
-                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
-                onClick={() => router.push("/vehicles")}
-              >
+              <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/vehicles")}>
                 <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Manage Vehicles</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
-                onClick={() => router.push("/manager/reports/pre-trip")}
-              >
+              <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/reports/pre-trip")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Pre-Trip Reports</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
-                onClick={() => router.push("/manager/reports/gas-analytics")}
-              >
+              <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/reports/gas-analytics")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Gas Analytics</span>
               </Button>
-              <Button
-                variant="outline"
-                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
-                onClick={() => router.push("/manager/data-override")}
-              >
+              <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/data-override")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Data Override</span>
               </Button>
