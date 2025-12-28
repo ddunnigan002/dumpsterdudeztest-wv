@@ -9,28 +9,32 @@ export async function GET(request: NextRequest) {
 
   try {
     const { searchParams } = new URL(request.url)
-    const days = Number.parseInt(searchParams.get("days") || "30")
-    const vehicleId = searchParams.get("vehicleId")
+    const daysRaw = searchParams.get("days") || "30"
+    const days = Number.isFinite(Number(daysRaw)) ? Number.parseInt(daysRaw, 10) : 30
+    const vehicleId = searchParams.get("vehicleId") // expect UUID or "all"
 
     const endDate = new Date()
     const startDate = new Date()
-    startDate.setDate(endDate.getDate() - days)
+    startDate.setDate(endDate.getDate() - Math.max(1, Math.min(days, 365))) // clamp 1..365
 
     let query = ctx.supabase
       .from("daily_logs")
-      .select(`
+      .select(
+        `
         log_date,
         start_mileage,
         end_mileage,
         fuel_added,
         fuel_cost,
-        vehicles!inner (
+        vehicle_id,
+        vehicles (
           vehicle_number,
           make,
           model,
           franchise_id
         )
-      `)
+      `
+      )
       .eq("vehicles.franchise_id", ctx.franchiseId)
       .gte("log_date", startDate.toISOString().split("T")[0])
       .lte("log_date", endDate.toISOString().split("T")[0])
@@ -38,17 +42,9 @@ export async function GET(request: NextRequest) {
       .not("fuel_cost", "is", null)
       .order("log_date", { ascending: true })
 
+    // ✅ Robust filter: vehicleId is the UUID from the dropdown
     if (vehicleId && vehicleId !== "all") {
-      const { data: vehicle } = await ctx.supabase
-        .from("vehicles")
-        .select("id")
-        .eq("vehicle_number", vehicleId.toUpperCase())
-        .eq("franchise_id", ctx.franchiseId)
-        .single()
-
-      if (vehicle) {
-        query = query.eq("vehicle_id", vehicle.id)
-      }
+      query = query.eq("vehicle_id", vehicleId)
     }
 
     const { data: logs, error } = await query
@@ -58,19 +54,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Failed to fetch gas data" }, { status: 500 })
     }
 
-    // Process data for analytics
     const analytics =
       logs?.map((log: any) => {
-        const milesDriven = log.end_mileage - log.start_mileage
-        const mpg = log.fuel_added > 0 ? milesDriven / log.fuel_added : 0
-        const costPerGallon = log.fuel_added > 0 ? log.fuel_cost / log.fuel_added : 0
-        const costPerMile = milesDriven > 0 ? log.fuel_cost / milesDriven : 0
+        const start = Number(log.start_mileage ?? 0)
+        const end = Number(log.end_mileage ?? 0)
+        const gallons = Number(log.fuel_added ?? 0)
+        const cost = Number(log.fuel_cost ?? 0)
+
+        const milesDriven = end - start
+        const mpg = gallons > 0 ? milesDriven / gallons : 0
+        const costPerGallon = gallons > 0 ? cost / gallons : 0
+        const costPerMile = milesDriven > 0 ? cost / milesDriven : 0
 
         return {
           date: log.log_date,
           vehicle: log.vehicles?.vehicle_number || "Unknown",
-          gallons: Number.parseFloat(log.fuel_added),
-          cost: Number.parseFloat(log.fuel_cost),
+          gallons: Number.parseFloat(gallons.toFixed(2)),
+          cost: Number.parseFloat(cost.toFixed(2)),
           milesDriven,
           mpg: Number.parseFloat(mpg.toFixed(2)),
           costPerGallon: Number.parseFloat(costPerGallon.toFixed(2)),
@@ -78,7 +78,6 @@ export async function GET(request: NextRequest) {
         }
       }) || []
 
-    // Calculate summary statistics
     const totalGallons = analytics.reduce((sum, entry) => sum + entry.gallons, 0)
     const totalCost = analytics.reduce((sum, entry) => sum + entry.cost, 0)
     const totalMiles = analytics.reduce((sum, entry) => sum + entry.milesDriven, 0)

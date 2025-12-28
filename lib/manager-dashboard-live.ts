@@ -287,25 +287,28 @@ export async function getManagerDashboardDataLive({
   // 9) Action items (filtered ids only)
   const actionItems: ActionItem[] = []
 
-  // Missed EOD yesterday (filtered)
+  // Missed EOD yesterday (filtered) — Option A: one row per vehicle
   const yesterday = new Date(today)
   yesterday.setDate(yesterday.getDate() - 1)
   const yKey = toYmd(yesterday)
-  const yCompletedSet = completedVehiclesByDate.get(yKey) ?? new Set<string>()
-  const yCompletedFiltered = filteredVehicleIds.filter((id) => yCompletedSet.has(id)).length
 
-  if (filteredVehicleIds.length > 0 && yCompletedFiltered < filteredVehicleIds.length) {
+  const yCompletedSet = completedVehiclesByDate.get(yKey) ?? new Set<string>()
+
+  // Vehicles in-scope (respect filter)
+  const missingVehicleIds = filteredVehicleIds.filter((id) => !yCompletedSet.has(id))
+
+  for (const vId of missingVehicleIds) {
+    const truckName = allVehicleList.find((v) => v.id === vId)?.name ?? "Vehicle"
+
     actionItems.push({
-      id: `missed-eod-${yKey}`,
+      id: `missed-eod-${vId}-${yKey}`,
       type: "missed-eod",
       urgency: "high",
       label: "End of Day Log Missed",
-      truckName: vehicleId && vehicleId !== "all"
-        ? (allVehicleList.find((v) => v.id === vehicleId)?.name ?? "Selected truck")
-        : "One or more trucks",
+      truckName,
       ageOrDue: "Yesterday",
-      ctaLabel: "Go to Daily Logs",
-      ctaLink: "/manager/daily-logs",
+      ctaLabel: "Complete End Day",
+      ctaLink: `/vehicle/${vId}/end-day?date=${encodeURIComponent(yKey)}`,
     })
   }
 

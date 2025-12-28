@@ -206,7 +206,11 @@ export default function ManagerDashboard({ userProfile }: Props) {
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" onClick={() => router.push(item.ctaLink)}>
+                    <Button
+                      size="sm"
+                      type="button"
+                      onClick={() => router.push(item.ctaLink)}
+                    >
                       {item.ctaLabel}
                     </Button>
                   </div>

@@ -2,31 +2,79 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Clock, Check } from "lucide-react"
+import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 
 interface EndDayProps {
-  vehicleId: string
+  vehicleId: string // UUID
+}
+
+type VehicleInfo = {
+  id: string
+  vehicle_number: string
+  make?: string | null
+  model?: string | null
+}
+
+function toYmd(d: Date) {
+  return d.toISOString().slice(0, 10)
 }
 
 export default function EndDay({ vehicleId }: EndDayProps) {
-  const [formData, setFormData] = useState({
-    endMileage: "",
-  })
+  const [formData, setFormData] = useState({ endMileage: "" })
   const [startMileage, setStartMileage] = useState<number | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
 
+  const [vehicleInfo, setVehicleInfo] = useState<VehicleInfo | null>(null)
+  const [vehicleLoading, setVehicleLoading] = useState(true)
+
+  const sp = useSearchParams()
+  const dateParam = sp.get("date") // expected YYYY-MM-DD (from dashboard)
+  const logDateYmd = useMemo(() => {
+    // If passed in, use it. Otherwise today.
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) return dateParam
+    return toYmd(new Date())
+  }, [dateParam])
+
   useEffect(() => {
-    // Fetch the start mileage for today
+    let cancelled = false
+
+    const fetchVehicle = async () => {
+      setVehicleLoading(true)
+      try {
+        // If you don't have this endpoint, see note below
+        const res = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" })
+        if (!res.ok) throw new Error(`Failed to load vehicle: ${res.status}`)
+        const json = await res.json()
+        const v = (json.vehicle ?? json) as VehicleInfo
+
+        if (!cancelled) setVehicleInfo(v)
+      } catch (error) {
+        console.error("Error fetching vehicle:", error)
+        if (!cancelled) setVehicleInfo(null)
+      } finally {
+        if (!cancelled) setVehicleLoading(false)
+      }
+    }
+
+    fetchVehicle()
+    return () => {
+      cancelled = true
+    }
+  }, [vehicleId])
+
+  useEffect(() => {
+    // Fetch the start mileage (last mileage) for this vehicle
     const fetchStartMileage = async () => {
       try {
-        const response = await fetch(`/api/vehicles/${vehicleId}/last-mileage`)
+        const response = await fetch(`/api/vehicles/${vehicleId}/last-mileage`, { cache: "no-store" })
         if (response.ok) {
           const data = await response.json()
           setStartMileage(data.lastMileage)
@@ -39,6 +87,17 @@ export default function EndDay({ vehicleId }: EndDayProps) {
     fetchStartMileage()
   }, [vehicleId])
 
+  const vehicleDisplay = useMemo(() => {
+    if (!vehicleInfo) return vehicleId
+    const parts = [vehicleInfo.vehicle_number, vehicleInfo.make, vehicleInfo.model].filter(Boolean)
+    return parts.join(" • ") || vehicleInfo.vehicle_number || vehicleId
+  }, [vehicleInfo, vehicleId])
+
+  const dailyMiles =
+    startMileage !== null && formData.endMileage
+      ? Number.parseInt(formData.endMileage, 10) - startMileage
+      : 0
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -46,18 +105,18 @@ export default function EndDay({ vehicleId }: EndDayProps) {
     console.log("[v0] End Day Component: Starting submission", {
       vehicleId,
       endMileage: formData.endMileage,
+      logDateYmd,
     })
 
     try {
       const response = await fetch("/api/end-day", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           vehicleId,
-          endMileage: Number.parseInt(formData.endMileage),
-          date: new Date().toISOString(),
+          endMileage: Number.parseInt(formData.endMileage, 10),
+          // ✅ send the intended log date (YYYY-MM-DD), not "now"
+          log_date: logDateYmd,
         }),
       })
 
@@ -69,28 +128,17 @@ export default function EndDay({ vehicleId }: EndDayProps) {
         setIsSubmitted(true)
         setFormData({ endMileage: "" })
       } else {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         console.error("[v0] End Day Component: Error response", errorData)
+        alert(errorData?.error ?? "Failed to record end of day. Please try again.")
       }
     } catch (error) {
       console.error("[v0] End Day Component: Caught error", error)
+      alert("Failed to record end of day. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
   }
-
-  const getVehicleDisplayName = (id: string) => {
-    switch (id.toLowerCase()) {
-      case "chevy":
-        return "Chevy Truck"
-      case "kenworth":
-        return "Kenworth Truck"
-      default:
-        return id
-    }
-  }
-
-  const dailyMiles = startMileage && formData.endMileage ? Number.parseInt(formData.endMileage) - startMileage : 0
 
   if (isSubmitted) {
     return (
@@ -131,12 +179,14 @@ export default function EndDay({ vehicleId }: EndDayProps) {
           <CardHeader>
             <CardTitle className="flex items-center">
               <Clock className="mr-2 h-5 w-5 text-primary" />
-              {getVehicleDisplayName(vehicleId)} - End of Day
+              {vehicleLoading ? "Loading..." : vehicleDisplay} - End of Day
             </CardTitle>
+            <div className="text-sm text-muted-foreground">{new Date(logDateYmd).toLocaleDateString()}</div>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              {startMileage && (
+              {startMileage !== null && (
                 <div className="bg-muted p-4 rounded-lg">
                   <p className="text-sm text-foreground">
                     <strong>Starting Mileage:</strong> {startMileage.toLocaleString()} miles
@@ -154,7 +204,7 @@ export default function EndDay({ vehicleId }: EndDayProps) {
                   onChange={(e) => setFormData({ ...formData, endMileage: e.target.value })}
                   required
                   className="text-lg h-12"
-                  min={startMileage || 0}
+                  min={startMileage ?? 0}
                 />
               </div>
 

@@ -7,10 +7,8 @@ export async function GET(req: Request) {
     const supabase = await createClient()
 
     // 1) Authenticated user
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabase.auth.getUser()
+    const { data: userRes, error: userErr } = await supabase.auth.getUser()
+    const user = userRes.user
 
     if (userErr || !user) {
       return NextResponse.json(
@@ -21,8 +19,7 @@ export async function GET(req: Request) {
 
     const url = new URL(req.url)
     const managerId = url.searchParams.get("managerId") || user.id
-    const vehicleId = url.searchParams.get("vehicleId") // NEW
-
+    const vehicleId = url.searchParams.get("vehicleId") || undefined
 
     // 2) Email required for public.users NOT NULL
     const email = user.email ?? user.user_metadata?.email ?? null
@@ -74,19 +71,20 @@ export async function GET(req: Request) {
     const franchiseId = membership.franchise_id as string
     const role = membership.role ?? "manager"
 
-    // 4) Keep legacy public.users row in sync (optional compatibility layer)
-    //    We DO set franchise_id here because membership is authoritative.
-    const { error: upsertErr } = await supabase.from("users").upsert(
-      {
-        id: managerId,
-        email,
-        full_name: fullName,
-        role,
-        franchise_id: franchiseId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    )
+    // 4) Keep legacy public.users row in sync (compat layer)
+    const { error: upsertErr } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: managerId,
+          email,
+          full_name: fullName,
+          role,
+          franchise_id: franchiseId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      )
 
     if (upsertErr) {
       return NextResponse.json(
@@ -95,7 +93,7 @@ export async function GET(req: Request) {
       )
     }
 
-    // 5) Fetch live dashboard data
+    // 5) Fetch live dashboard data (this is where we’ll build per-vehicle action items)
     const dashboard = await getManagerDashboardDataLive({
       supabase,
       franchiseId,
