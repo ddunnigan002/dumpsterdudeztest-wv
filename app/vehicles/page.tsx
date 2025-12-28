@@ -42,7 +42,7 @@ function logoPathForMake(make: string) {
   let slug = makeSlug(make)
   if (!slug) return null
   slug = MAKE_ALIASES[slug] ?? slug
-  return `/vehicle-makes/${slug}.png`
+  return `/${slug}.png`
 }
 
 function MakeLogo({ make }: { make: string }) {
