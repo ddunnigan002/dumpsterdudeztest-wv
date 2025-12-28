@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { useSearchParams } from "next/navigation"
 import {
   ArrowLeft,
   CheckCircle,
@@ -21,7 +22,7 @@ interface ChecklistSummary {
   vehicle_make: string
   vehicle_model: string
   checklist_date: string // "YYYY-MM-DD"
-  overall_status: "pass" | "fail" | "pending"
+  overall_status: "pass" | "fail" | "service_soon" | "pending"
   driver_name: string
   issues_count: number
   notes?: string
@@ -73,6 +74,12 @@ export default function PreTripReports() {
   const [vehicles, setVehicles] = useState<Array<{ id: string; vehicle_number: string }>>([])
 
   const todayKey = useMemo(() => toDateKeyLocal(new Date()), [])
+
+  const searchParams = useSearchParams()
+  const qpDate = searchParams.get("date") // "YYYY-MM-DD"
+  const qpVehicle = searchParams.get("vehicle") // "TRUCK-02"
+  const qpType = searchParams.get("type") // "Daily"
+
 
   useEffect(() => {
     void fetchVehicles()
@@ -163,6 +170,42 @@ export default function PreTripReports() {
 
     return list
   }, [currentDate, filteredReports, reports, selectedVehicle])
+
+  useEffect(() => {
+  if (!qpDate) return
+
+  // If date is outside current month, jump to that month first
+  const [yy, mm] = qpDate.split("-").map(Number)
+  if (yy && mm) {
+    const targetMonth = new Date(yy, mm - 1, 1)
+    const sameMonth =
+      targetMonth.getFullYear() === currentDate.getFullYear() &&
+      targetMonth.getMonth() === currentDate.getMonth()
+
+    if (!sameMonth) {
+      setCurrentDate(targetMonth)
+      return // wait for refetch / recalculation
+    }
+  }
+
+  // Apply filters if present
+  if (qpVehicle && qpVehicle !== selectedVehicle) {
+    setSelectedVehicle(qpVehicle)
+    return
+  }
+  if (qpType && qpType !== selectedChecklistType) {
+    setSelectedChecklistType(qpType)
+    return
+  }
+
+  // Find the day object and open Details view
+  const day = calendarData.find((d) => d.date === qpDate)
+  if (day && day.checklists.length > 0) {
+    setSelectedDay(day)
+    setViewMode("details")
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [qpDate, qpVehicle, qpType, calendarData])
 
   const monthLabel = useMemo(() => {
     return currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })

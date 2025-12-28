@@ -21,6 +21,7 @@ export default function PreTripReportsPage() {
             <ArrowLeft className="h-4 w-4" />
             Back to Dashboard
           </Button>
+
           <div className="flex items-center gap-4">
             <img src="/dumpster-dudez-logo.svg" alt="Dumpster Dudez" className="h-10 w-auto" />
             <div>

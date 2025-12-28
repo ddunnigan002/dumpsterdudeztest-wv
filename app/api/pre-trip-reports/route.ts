@@ -1,11 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getActiveFranchiseContext, isContextError, contextErrorResponse } from "@/lib/api/franchise-context"
 
+function toISO(d: Date) {
+  return d.toISOString().split("T")[0]
+}
+
 export async function GET(request: NextRequest) {
   const ctx = await getActiveFranchiseContext()
-  if (isContextError(ctx)) {
-    return contextErrorResponse(ctx)
-  }
+  if (isContextError(ctx)) return contextErrorResponse(ctx)
 
   try {
     const { searchParams } = new URL(request.url)
@@ -21,16 +23,22 @@ export async function GET(request: NextRequest) {
       startDate = new Date(startParam)
       endDate = new Date(endParam)
     } else {
-      const daysCount = Number.parseInt(days || "7")
+      const daysCount = Number.parseInt(days || "7", 10)
       endDate = new Date()
       startDate = new Date()
       startDate.setDate(endDate.getDate() - daysCount)
     }
 
-    const { data: reports, error } = await ctx.supabase
+    const startISO = toISO(startDate)
+    const endISO = toISO(endDate)
+
+    const { data: reports, error: rErr } = await ctx.supabase
       .from("daily_checklists")
-      .select(`
+      .select(
+        `
         id,
+        vehicle_id,
+        driver_id,
         checklist_date,
         overall_status,
         notes,
@@ -39,58 +47,77 @@ export async function GET(request: NextRequest) {
         brakes_working,
         fluid_levels_ok,
         mirrors_clean,
-        safety_equipment_present,
-        vehicles!inner (
-          vehicle_number,
-          make,
-          model,
-          franchise_id
-        ),
-        users (
-          full_name
-        )
-      `)
-      .eq("vehicles.franchise_id", ctx.franchiseId)
-      .gte("checklist_date", startDate.toISOString().split("T")[0])
-      .lte("checklist_date", endDate.toISOString().split("T")[0])
+        safety_equipment_present
+      `
+      )
+      .eq("franchise_id", ctx.franchiseId)
+      .gte("checklist_date", startISO)
+      .lte("checklist_date", endISO)
       .order("checklist_date", { ascending: false })
 
-    if (error) {
-      console.error("Database error:", error)
+    if (rErr) {
+      console.error("Database error (daily_checklists):", rErr)
       return NextResponse.json({ error: "Failed to fetch reports" }, { status: 500 })
     }
 
-    // Transform data for frontend
-    const transformedReports =
-      reports?.map((report: any) => {
-        // Count failed items
-        const failedItems = [
-          !report.tires_condition,
-          !report.lights_working,
-          !report.brakes_working,
-          !report.fluid_levels_ok,
-          !report.mirrors_clean,
-          !report.safety_equipment_present,
-        ].filter(Boolean).length
+    const rows = reports ?? []
+    if (rows.length === 0) return NextResponse.json({ reports: [] })
 
-        return {
-          id: report.id,
-          vehicle_number: report.vehicles?.vehicle_number || "Unknown",
-          vehicle_make: report.vehicles?.make || "Unknown",
-          vehicle_model: report.vehicles?.model || "Unknown",
-          checklist_date: report.checklist_date,
-          overall_status: report.overall_status,
-          driver_name: report.users?.full_name || "Unknown Driver",
-          issues_count: failedItems,
-          notes: report.notes,
-          tires_condition: report.tires_condition,
-          lights_working: report.lights_working,
-          brakes_working: report.brakes_working,
-          fluid_levels_ok: report.fluid_levels_ok,
-          mirrors_clean: report.mirrors_clean,
-          safety_equipment_present: report.safety_equipment_present,
-        }
-      }) || []
+    const vehicleIds = Array.from(new Set(rows.map((r: any) => r.vehicle_id).filter(Boolean)))
+    const { data: vehicles, error: vErr } = await ctx.supabase
+      .from("vehicles")
+      .select("id, vehicle_number, make, model")
+      .eq("franchise_id", ctx.franchiseId)
+      .in("id", vehicleIds)
+
+    if (vErr) {
+      console.error("Database error (vehicles):", vErr)
+      return NextResponse.json({ error: "Failed to fetch vehicles for reports" }, { status: 500 })
+    }
+
+    const vehicleMap = new Map((vehicles ?? []).map((v: any) => [v.id, v]))
+
+    // driver_id references profiles(id) in your constraints, so use profiles
+    const driverIds = Array.from(new Set(rows.map((r: any) => r.driver_id).filter(Boolean)))
+    let driverMap = new Map<string, any>()
+    if (driverIds.length) {
+      const { data: drivers, error: pErr } = await ctx.supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", driverIds)
+
+      if (pErr) {
+        console.error("Database error (profiles):", pErr)
+      } else {
+        driverMap = new Map((drivers ?? []).map((p: any) => [p.id, p]))
+      }
+    }
+
+    const transformedReports = rows.map((report: any) => {
+      const vehicle = vehicleMap.get(report.vehicle_id)
+      const driver = driverMap.get(report.driver_id)
+
+      const failedItems = [
+        report.tires_condition === false,
+        report.lights_working === false,
+        report.brakes_working === false,
+        report.fluid_levels_ok === false,
+        report.mirrors_clean === false,
+        report.safety_equipment_present === false,
+      ].filter(Boolean).length
+
+      return {
+        id: report.id,
+        vehicle_number: vehicle?.vehicle_number ?? "Unknown",
+        vehicle_make: vehicle?.make ?? "Unknown",
+        vehicle_model: vehicle?.model ?? "Unknown",
+        checklist_date: report.checklist_date,
+        overall_status: report.overall_status,
+        driver_name: driver?.full_name ?? "Unknown Driver",
+        issues_count: failedItems,
+        notes: report.notes,
+      }
+    })
 
     return NextResponse.json({ reports: transformedReports })
   } catch (error) {

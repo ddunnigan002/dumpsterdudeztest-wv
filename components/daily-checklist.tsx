@@ -41,6 +41,12 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
     setPhotoUrls((prev) => [...prev, url])
   }
 
+  const computeOverallStatus = () => {
+    if (checklist.some((i) => i.status === "fail")) return "fail"
+    if (checklist.some((i) => i.status === "service_soon")) return "service_soon"
+    return "pass"
+  }
+
   const handleSubmit = async () => {
     setIsSubmitting(true)
     setError("")
@@ -57,6 +63,7 @@ export default function DailyChecklist({ vehicleNumber, onBack }: DailyChecklist
         checklist,
         notes,
         photoUrls,
+        overall_status: computeOverallStatus()
       }
 
       console.log("📤 Sending payload:", JSON.stringify(payload, null, 2))

@@ -7,32 +7,50 @@ import {
 } from "@/lib/api/franchise-context"
 
 function decodeMaybe(value: unknown): string {
-  // Handles values like "DANS%20TRUCK" safely
   const raw = typeof value === "string" ? value : ""
   try {
     return decodeURIComponent(raw).trim()
   } catch {
-    // If it's not valid URI encoding, just return the trimmed raw value
     return raw.trim()
   }
 }
 
+function toISODateToday() {
+  return new Date().toISOString().split("T")[0]
+}
+
+type OverallStatus = "pass" | "service_soon" | "fail"
+
+function normalizeStatus(s: unknown) {
+  return String(s ?? "").toLowerCase().trim().replace(/\s+/g, "_")
+}
+
+function computeOverallStatus(checklist: any[]): OverallStatus {
+  const statuses = (checklist ?? []).map((i) => normalizeStatus(i?.status))
+
+  if (statuses.includes("fail")) return "fail"
+  if (statuses.includes("service_soon")) return "service_soon"
+  return "pass"
+}
+
+function isPassForItem(checklist: any[], itemId: string) {
+  const item = (checklist ?? []).find((i) => i?.id === itemId)
+  return normalizeStatus(item?.status) === "pass"
+}
+
 export async function GET(request: NextRequest) {
   const ctx = await getActiveFranchiseContext()
-  if (isContextError(ctx)) {
-    return contextErrorResponse(ctx)
-  }
+  if (isContextError(ctx)) return contextErrorResponse(ctx)
 
   try {
     const { searchParams } = new URL(request.url)
     const vehicleIdRaw = searchParams.get("vehicleId")
-    const date = searchParams.get("date") || new Date().toISOString().split("T")[0]
+    const date = searchParams.get("date") || toISODateToday()
 
     if (!vehicleIdRaw) {
       return NextResponse.json({ error: "Vehicle ID is required" }, { status: 400 })
     }
 
-    // Defensive: decode in case the caller URL-encoded it
     const vehicleId = decodeMaybe(vehicleIdRaw)
 
     const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, vehicleId)
@@ -40,7 +58,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ completed: false }, { status: 200 })
     }
 
-    // Check if checklist exists for this vehicle and date
     const { data, error } = await ctx.supabase
       .from("daily_checklists")
       .select("id, overall_status")
@@ -64,124 +81,81 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  console.log("🔵 API: Daily checklist POST request received")
-
   const ctx = await getActiveFranchiseContext()
-  if (isContextError(ctx)) {
-    return contextErrorResponse(ctx)
-  }
+  if (isContextError(ctx)) return contextErrorResponse(ctx)
 
   try {
-    let body: any
-    try {
-      body = await request.json()
-      console.log("🔵 API: Request body parsed:", JSON.stringify(body, null, 2))
-    } catch (parseError) {
-      console.error("❌ API: Failed to parse request body:", parseError)
-      return NextResponse.json({ error: "Invalid JSON in request body" }, { status: 400 })
-    }
+    const body = await request.json()
+    const { vehicleNumber, checklist, notes /* photoUrls */ } = body
 
-    const { vehicleNumber, checklist, notes } = body
-
-    // ✅ FIX: decode URL-encoded vehicle numbers (e.g. "DANS%20TRUCK" -> "DANS TRUCK")
     const decodedVehicleNumber = decodeMaybe(vehicleNumber)
 
-    // Validate required fields
     if (!decodedVehicleNumber) {
-      console.error("❌ API: Missing vehicleNumber")
       return NextResponse.json({ error: "Vehicle number is required" }, { status: 400 })
     }
 
-    if (!checklist || !Array.isArray(checklist)) {
-      console.error("❌ API: Invalid checklist data")
+    if (!Array.isArray(checklist)) {
       return NextResponse.json({ error: "Checklist data is required and must be an array" }, { status: 400 })
     }
 
-    console.log("🔵 API: Looking for vehicle with number:", decodedVehicleNumber)
-
+    // Your helper seems to accept either ID or vehicle_number; we keep your usage.
     const vehicle = await validateVehicleInFranchise(ctx.supabase, ctx.franchiseId, decodedVehicleNumber)
     if (!vehicle) {
-      console.error("❌ API: Vehicle not found in franchise")
       return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    console.log("🔵 API: Vehicle found in franchise:", vehicle)
+    const checklist_date = toISODateToday()
+    const overall_status = computeOverallStatus(checklist)
 
-    // Helper function to safely get checklist item status
-    const getItemStatus = (itemId: string) => {
-      const item = checklist.find((item: any) => item.id === itemId)
-      console.log(`🔵 API: Item ${itemId} status:`, item?.status)
-      return item?.status === "pass"
-    }
-
-    console.log("🔵 API: Building checklist data...")
-
-    // Build base record
-    const checklistData: Record<string, any> = {
-      vehicle_id: vehicle.id,
-      driver_id: ctx.user.id, // authenticated user
-      checklist_date: new Date().toISOString().split("T")[0],
-      overall_status: checklist.some((item: any) => item.status === "fail")
-        ? "fail"
-        : checklist.some((item: any) => item.status === "service_soon")
-          ? "pending"
-          : "pass",
-      notes: notes || null,
-    }
-
-    console.log("🔵 API: Base checklist data:", JSON.stringify(checklistData, null, 2))
-
-    // Only map the items that exist in your frontend -> DB columns
-    const itemMapping: Record<string, string> = {
+    // Map your UI items -> DB boolean columns (true ONLY if pass; otherwise false)
+    const itemToBoolColumn: Record<string, string> = {
       tires: "tires_condition",
       lights: "lights_working",
       brakes: "brakes_working",
       fluids: "fluid_levels_ok",
+
+      // If you add these items to the UI later, you can turn these on:
+      // mirrors: "mirrors_clean",
+      // safety: "safety_equipment_present",
     }
 
-    Object.entries(itemMapping).forEach(([frontendId, dbColumn]) => {
-      const status = getItemStatus(frontendId)
-      checklistData[dbColumn] = status
-      console.log(`🔵 API: Mapped ${frontendId} -> ${dbColumn} = ${status}`)
-    })
+    const checklistData: Record<string, any> = {
+      franchise_id: ctx.franchiseId,
+      vehicle_id: vehicle.id,
+      driver_id: ctx.user.id,
+      checklist_date,
+      overall_status,
+      notes: notes || null,
 
-    console.log("🔵 API: Final checklist data:", JSON.stringify(checklistData, null, 2))
-    console.log("🔵 API: Attempting to upsert to daily_checklists table...")
+      // This is the “source of truth” for pass/service_soon/fail per item
+      custom_items: checklist,
+    }
+
+    // Fill boolean columns based on pass-only
+    for (const [itemId, col] of Object.entries(itemToBoolColumn)) {
+      checklistData[col] = isPassForItem(checklist, itemId)
+    }
 
     const { data, error } = await ctx.supabase
       .from("daily_checklists")
-      .upsert(checklistData, {
-        onConflict: "vehicle_id,checklist_date",
-      })
+      .upsert(checklistData, { onConflict: "vehicle_id,checklist_date" })
       .select()
       .single()
 
-    console.log("🔵 API: Upsert result:", { data, error })
-
     if (error) {
-      console.error("❌ API: Database error:", error)
-      console.error("❌ API: Error details:", JSON.stringify(error, null, 2))
+      console.error("Daily checklist DB error:", error)
       return NextResponse.json(
-        {
-          error: "Failed to save checklist",
-          details: error.message,
-          hint: error.hint,
-        },
-        { status: 500 },
+        { error: "Failed to save checklist", details: error.message, hint: (error as any).hint ?? null },
+        { status: 500 }
       )
     }
 
-    console.log("✅ API: Checklist saved successfully!")
     return NextResponse.json({ success: true, data })
   } catch (error) {
-    console.error("❌ API: Unexpected error:", error)
-    console.error("❌ API: Error stack:", error instanceof Error ? error.stack : "No stack trace")
+    console.error("Daily checklist API error:", error)
     return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
+      { error: "Internal server error", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 }
     )
   }
 }
