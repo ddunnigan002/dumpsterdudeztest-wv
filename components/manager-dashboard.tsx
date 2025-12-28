@@ -81,7 +81,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <p className="text-muted-foreground">Loading dashboard...</p>
       </div>
     )
@@ -89,7 +89,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
   if (!data) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <p className="text-muted-foreground">Failed to load dashboard</p>
       </div>
     )
@@ -97,44 +97,52 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="sm" onClick={() => router.push("/")} className="flex items-center gap-2">
+      <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => router.push("/")}
+              className="flex items-center gap-2 self-start"
+            >
               <ArrowLeft className="h-4 w-4" />
-              Home
+              <span className="hidden sm:inline">Home</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Manager Dashboard</h1>
-              <p className="text-sm text-muted-foreground">Welcome, {userProfile.full_name}</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-foreground">Manager Dashboard</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground">Welcome, {userProfile.full_name}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push("/manager/settings")}>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.push("/manager/settings")}
+              className="w-full sm:w-auto justify-center"
+            >
               <Settings className="h-4 w-4 mr-2" />
               Settings
             </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout}>
+            <Button variant="ghost" size="sm" onClick={handleLogout} className="w-full sm:w-auto justify-center">
               <LogOut className="h-4 w-4 mr-2" />
               Logout
             </Button>
           </div>
         </div>
 
-        {/* Truck Status Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {data.trucks.map((truck) => (
             <Card
               key={truck.id}
               className="cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => router.push(`/manager/vehicle/${truck.id}`)}
             >
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="font-semibold text-lg">{truck.name}</h3>
-                    <p className="text-sm text-muted-foreground">{truck.vehicleNumber}</p>
+                  <div className="min-w-0 flex-1 mr-2">
+                    <h3 className="font-semibold text-base sm:text-lg truncate">{truck.name}</h3>
+                    <p className="text-xs sm:text-sm text-muted-foreground truncate">{truck.vehicleNumber}</p>
                   </div>
                   <Badge
                     variant={
@@ -144,6 +152,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                           ? "secondary"
                           : "destructive"
                     }
+                    className="shrink-0 text-xs"
                   >
                     {truck.status === "operational"
                       ? "Operational"
@@ -152,7 +161,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                         : "Out of Service"}
                   </Badge>
                 </div>
-                <div className="space-y-2 text-sm">
+                <div className="space-y-2 text-xs sm:text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Last EOD:</span>
                     <span className={truck.lastEOD ? "" : "text-destructive font-medium"}>
@@ -167,7 +176,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                   </div>
                   <div className="pt-2 border-t">
                     <p className="text-xs text-muted-foreground">Next Maintenance:</p>
-                    <p className="text-sm font-medium">{truck.nextMaintenance}</p>
+                    <p className="text-xs sm:text-sm font-medium truncate">{truck.nextMaintenance}</p>
                   </div>
                 </div>
               </CardContent>
@@ -178,27 +187,30 @@ export default function ManagerDashboard({ userProfile }: Props) {
         {/* Action Needed Section */}
         {data.actionItems.length > 0 && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" />
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5" />
                 Action Needed
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 sm:p-6 pt-0">
               <div className="space-y-3">
                 {data.actionItems.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-4 bg-muted/50 rounded-lg border">
-                    <div className="flex items-start gap-3 flex-1">
+                  <div
+                    key={item.id}
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 sm:p-4 bg-muted/50 rounded-lg border"
+                  >
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
                       {item.urgency === "high" ? (
-                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
                       ) : item.urgency === "medium" ? (
-                        <Clock className="h-5 w-5 text-amber-500 mt-0.5" />
+                        <Clock className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
                       ) : (
-                        <AlertTriangle className="h-5 w-5 text-muted-foreground mt-0.5" />
+                        <AlertTriangle className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
                       )}
-                      <div className="flex-1">
-                        <p className="font-medium">{item.label}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm sm:text-base">{item.label}</p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
                           <Badge variant="outline" className="text-xs">
                             {item.truckName}
                           </Badge>
@@ -210,6 +222,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                       size="sm"
                       type="button"
                       onClick={() => router.push(item.ctaLink)}
+                      className="w-full sm:w-auto shrink-0"
                     >
                       {item.ctaLabel}
                     </Button>
@@ -222,38 +235,36 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
         {/* Compliance Widget */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5" />
               Compliance
             </CardTitle>
           </CardHeader>
 
-          <CardContent>
-            <div className="overflow-x-auto">
-              <div className="min-w-[900px]">
-                <ComplianceHeatmapByTruck franchiseId={userProfile.franchise_id} />
-              </div>
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-hidden">
+              <ComplianceHeatmapByTruck franchiseId={userProfile.franchise_id} />
             </div>
           </CardContent>
-        </Card>
 
+        </Card>
 
         {/* Maintenance Forecast */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wrench className="h-5 w-5" />
-              Maintenance Forecast (Next 45 Days)
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <Wrench className="h-4 w-4 sm:h-5 sm:w-5" />
+              <span className="text-sm sm:text-base">Maintenance Forecast (Next 45 Days)</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="space-y-4 sm:space-y-6">
               {maintenanceByTruck.map(({ truckName, list }) => (
                 <div key={truckName} className="space-y-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                     <p className="text-sm font-semibold">{truckName}</p>
-                    <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 sm:gap-3 text-xs flex-wrap">
                       <LegendDot label="Overdue" className="bg-red-500" />
                       <LegendDot label="< 7d" className="bg-amber-500" />
                       <LegendDot label="< 14d" className="bg-blue-500" />
@@ -265,7 +276,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                     {list.map((item) => (
                       <div
                         key={item.id}
-                        className={`flex items-center justify-between p-2 rounded border ${
+                        className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 sm:p-2 rounded border ${
                           item.category === "overdue"
                             ? "bg-red-50"
                             : item.category === "due-7days"
@@ -275,9 +286,9 @@ export default function ManagerDashboard({ userProfile }: Props) {
                                 : "bg-muted/50"
                         }`}
                       >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium truncate">{item.description}</p>
-                          <p className="text-xs text-muted-foreground">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium break-words">{item.description}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
                             {item.category === "overdue"
                               ? "Overdue"
                               : item.category === "due-7days"
@@ -287,7 +298,9 @@ export default function ManagerDashboard({ userProfile }: Props) {
                                   : "Later"}
                           </p>
                         </div>
-                        <p className="text-xs text-muted-foreground">{item.dueDate ? formatDate(item.dueDate) : "TBD"}</p>
+                        <p className="text-xs text-muted-foreground sm:text-right shrink-0">
+                          {item.dueDate ? formatDate(item.dueDate) : "TBD"}
+                        </p>
                       </div>
                     ))}
                     {list.length === 0 && <p className="text-sm text-muted-foreground">No scheduled items.</p>}
@@ -300,42 +313,42 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
         {/* Quick Links */}
         <Card>
-          <CardHeader>
-            <CardTitle>Quick Links</CardTitle>
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg">Quick Links</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <CardContent className="p-4 sm:p-6 pt-0">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
               <Button
                 variant="outline"
-                className="h-20 flex flex-col gap-2 bg-transparent"
+                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
                 onClick={() => router.push("/vehicles")}
               >
-                <Truck className="h-5 w-5" />
-                <span className="text-xs">Manage Vehicles</span>
+                <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs leading-tight text-center">Manage Vehicles</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col gap-2 bg-transparent"
+                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
                 onClick={() => router.push("/manager/reports/pre-trip")}
               >
-                <FileText className="h-5 w-5" />
-                <span className="text-xs">Pre-Trip Reports</span>
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs leading-tight text-center">Pre-Trip Reports</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col gap-2 bg-transparent"
+                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
                 onClick={() => router.push("/manager/reports/gas-analytics")}
               >
-                <FileText className="h-5 w-5" />
-                <span className="text-xs">Gas Analytics</span>
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs leading-tight text-center">Gas Analytics</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-20 flex flex-col gap-2 bg-transparent"
+                className="h-20 sm:h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
                 onClick={() => router.push("/manager/data-override")}
               >
-                <FileText className="h-5 w-5" />
-                <span className="text-xs">Data Override</span>
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs leading-tight text-center">Data Override</span>
               </Button>
             </div>
           </CardContent>
@@ -345,13 +358,9 @@ export default function ManagerDashboard({ userProfile }: Props) {
   )
 }
 
-/* =========================
-   Helpers + Components
-========================= */
-
 function LegendDot({ label, className }: { label: string; className: string }) {
   return (
-    <span className="inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1 whitespace-nowrap">
       <span className={`w-2.5 h-2.5 rounded-full ${className}`} />
       {label}
     </span>
