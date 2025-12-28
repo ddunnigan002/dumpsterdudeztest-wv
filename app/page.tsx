@@ -1,27 +1,98 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { Settings } from "lucide-react"
+import { Settings, Truck } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
+type Vehicle = {
+  id: string
+  vehicle_number: string
+  make: string
+  model: string
+  status: string
+  current_mileage?: number | null
+}
+
+function normalizeMakeForLogo(make: string) {
+  const raw = (make ?? "").trim()
+  if (!raw) return ""
+  // Use first word as brand: "International MV" -> "International"
+  return raw.split(/\s+/)[0] || raw
+}
+
+function makeSlug(make: string) {
+  const normalized = normalizeMakeForLogo(make)
+  return (normalized ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/['".]/g, "")
+    .replace(/&/g, "and")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+}
+
+const MAKE_ALIASES: Record<string, string> = {
+  chevy: "chevrolet",
+  intl: "international",
+}
+
+function logoPathForMake(make: string) {
+  let slug = makeSlug(make)
+  if (!slug) return null
+  slug = MAKE_ALIASES[slug] ?? slug
+
+  // ✅ matches your existing public files:
+  // /public/ford-logo.png -> /ford-logo.png
+  return `/${slug}-logo.png`
+}
+
+function MakeLogo({ make }: { make: string }) {
+  const [broken, setBroken] = useState(false)
+  const src = useMemo(() => logoPathForMake(make), [make])
+
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+
+  return (
+    <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0 h-12 w-12 flex items-center justify-center">
+      {src && !broken ? (
+        <Image
+          src={src}
+          alt={make}
+          width={24}
+          height={24}
+          className="h-6 w-6 object-contain"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <Truck className="h-6 w-6 text-muted-foreground" />
+      )}
+    </div>
+  )
+}
+
 export default function Home() {
-  const [vehicles, setVehicles] = useState([])
+  const [vehicles, setVehicles] = useState<Vehicle[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     const fetchVehicles = async () => {
       try {
-        const response = await fetch("/api/vehicles")
+        const response = await fetch("/api/vehicles", { cache: "no-store" })
         if (response.ok) {
           const data = await response.json()
-          const vehiclesArray = data.vehicles || data || []
+          const vehiclesArray = Array.isArray(data?.vehicles) ? data.vehicles : Array.isArray(data) ? data : []
           setVehicles(vehiclesArray)
+        } else {
+          setVehicles([])
         }
       } catch (error) {
         console.error("Error fetching vehicles:", error)
+        setVehicles([])
       } finally {
         setLoading(false)
       }
@@ -57,21 +128,15 @@ export default function Home() {
                 <Card className="bg-card hover:bg-muted/50 transition-all duration-200 border-border hover:border-accent/30 active:scale-[0.98] cursor-pointer">
                   <CardHeader className="pb-4">
                     <div className="flex items-center space-x-4">
-                      <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0">
-                        <Image
-                          src={`/images/${vehicle.make.toLowerCase()}-logo.png`}
-                          alt={vehicle.make}
-                          width={24}
-                          height={24}
-                          className="h-6 w-6"
-                        />
-                      </div>
+                      <MakeLogo make={vehicle.make} />
+
                       <div className="text-left flex-1">
                         <CardTitle className="text-lg text-card-foreground">{vehicle.vehicle_number}</CardTitle>
                         <CardDescription className="text-muted-foreground">
                           {vehicle.make} {vehicle.model}
                         </CardDescription>
                       </div>
+
                       <div className="text-right">
                         <div className="text-xs text-accent font-medium capitalize">{vehicle.status}</div>
                         <div className="text-xs text-muted-foreground">

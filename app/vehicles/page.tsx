@@ -22,8 +22,18 @@ interface Vehicle {
   status: string
 }
 
+function normalizeMakeForLogo(make: string) {
+  const raw = (make ?? "").trim()
+  if (!raw) return ""
+
+  // Use the brand (first word). Works for: "International MV", "Peterbilt 337", "Ford F-150"
+  return raw.split(/\s+/)[0] || raw
+}
+
 function makeSlug(make: string) {
-  return (make ?? "")
+  const normalized = normalizeMakeForLogo(make)
+
+  return (normalized ?? "")
     .trim()
     .toLowerCase()
     .replace(/['".]/g, "")
@@ -32,7 +42,6 @@ function makeSlug(make: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-// Optional: normalize common aliases once (no per-truck hardcoding)
 const MAKE_ALIASES: Record<string, string> = {
   chevy: "chevrolet",
   intl: "international",
@@ -42,7 +51,10 @@ function logoPathForMake(make: string) {
   let slug = makeSlug(make)
   if (!slug) return null
   slug = MAKE_ALIASES[slug] ?? slug
-  return `/${slug}.png`
+
+  // ✅ matches your existing files in /public:
+  // /public/ford-logo.png -> /ford-logo.png
+  return `/${slug}-logo.png`
 }
 
 function MakeLogo({ make }: { make: string }) {
