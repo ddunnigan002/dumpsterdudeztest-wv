@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Settings, Truck } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
@@ -14,11 +13,24 @@ type Vehicle = {
   make: string
   model: string
   status: string
-  current_mileage: number
+  current_mileage?: number | null
+}
+
+type VehiclesResponse = {
+  vehicles: Vehicle[]
+  franchiseName?: string | null
+  error?: string
+}
+
+function normalizeMakeForLogo(make: string) {
+  const raw = (make ?? "").trim()
+  if (!raw) return ""
+  return raw.split(/\s+/)[0] || raw
 }
 
 function makeSlug(make: string) {
-  return (make ?? "")
+  const normalized = normalizeMakeForLogo(make)
+  return (normalized ?? "")
     .trim()
     .toLowerCase()
     .replace(/['".]/g, "")
@@ -27,32 +39,31 @@ function makeSlug(make: string) {
     .replace(/^-+|-+$/g, "")
 }
 
-// Keep aliases minimal + generic (not per-truck). This just normalizes common inputs.
 const MAKE_ALIASES: Record<string, string> = {
   chevy: "chevrolet",
   intl: "international",
-  "international-truck": "international",
 }
 
 function logoPathForMake(make: string) {
   let slug = makeSlug(make)
   if (!slug) return null
   slug = MAKE_ALIASES[slug] ?? slug
-  // IMPORTANT: this must match where you actually placed the images:
-  // /public/vehicle-makes/ford.png, /public/vehicle-makes/peterbilt.png, etc.
+  // expects: /public/ford-logo.png etc
   return `/${slug}-logo.png`
 }
 
 function MakeLogo({ make }: { make: string }) {
   const [broken, setBroken] = useState(false)
-  const src = logoPathForMake(make)
+  const src = useMemo(() => logoPathForMake(make), [make])
+
+  useEffect(() => setBroken(false), [src])
 
   return (
-    <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0 flex items-center justify-center">
+    <div className="p-3 bg-accent/10 rounded-lg flex-shrink-0 h-12 w-12 flex items-center justify-center">
       {src && !broken ? (
         <Image
           src={src}
-          alt={`${make} logo`}
+          alt={make}
           width={24}
           height={24}
           className="h-6 w-6 object-contain"
@@ -71,96 +82,69 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchVehicles = async () => {
+    const load = async () => {
       try {
-        const response = await fetch("/api/vehicles", { cache: "no-store" })
-        if (response.ok) {
-          const data = await response.json()
+        const res = await fetch("/api/vehicles", { cache: "no-store" })
 
-          // NEW: your API now returns { franchiseName, vehicles }
-          setFranchiseName(data?.franchiseName ?? null)
-
-          const vehiclesArray = Array.isArray(data?.vehicles)
-            ? data.vehicles
-            : Array.isArray(data)
-              ? data
-              : []
-          setVehicles(vehiclesArray)
-        } else {
+        // IMPORTANT: if we got HTML (login page/404), don't try to parse json.
+        if (!res.ok) {
+          const text = await res.text().catch(() => "")
+          console.error("Home load error:", res.status, text)
           setVehicles([])
+          setFranchiseName(null)
+          return
         }
-      } catch (error) {
-        console.error("Error fetching vehicles:", error)
+
+        const data: VehiclesResponse = await res.json()
+        setVehicles(Array.isArray(data?.vehicles) ? data.vehicles : [])
+        setFranchiseName(data?.franchiseName ?? null)
+      } catch (e) {
+        console.error("Home load error:", e)
         setVehicles([])
+        setFranchiseName(null)
       } finally {
         setLoading(false)
       }
     }
 
-    fetchVehicles()
+    load()
   }, [])
 
-  const heading = useMemo(() => {
-    const name = franchiseName?.trim()
-    return name ? `Dumpster Dudez of ${name}` : "Dumpster Dudez"
-  }, [franchiseName])
+  const headerFranchise = franchiseName ? `Dumpster Dudez of ${franchiseName}` : "Dumpster Dudez of Your Franchise"
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-background border-b border-border">
-        <div className="container mx-auto px-4 py-5 sm:py-4">
-          <div className="flex flex-col items-center sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex flex-col items-center sm:items-start">
-              <Image
-                src="/dumpster-dudez-logo.svg"
-                alt="Dumpster Dudez"
-                width={240}
-                height={80}
-                priority
-                className="h-14 w-auto sm:h-9 drop-shadow-sm animate-ddz-pop"
-              />
+      {/* Sticky Branded Header */}
+      <header className="sticky top-0 z-50 bg-background/90 backdrop-blur border-b border-border">
+        <div className="container mx-auto px-4 py-3">
+          <div className="flex flex-col items-center gap-2">
+            {/* Bigger + centered logo on mobile */}
+            <Image
+              src="/dumpster-dudez-logo.svg"
+              alt="Dumpster Dudez"
+              width={240}
+              height={90}
+              priority
+              className="h-12 sm:h-10 w-auto drop-shadow-[0_2px_10px_rgba(0,0,0,0.12)]"
+            />
 
-              {/* Franchise name + subtitle */}
-              <div className="text-center sm:text-left mt-2 sm:mt-1">
-                <div className="text-xl sm:text-base font-extrabold tracking-tight text-foreground">
-                  Dumpster Dudez{franchiseName ? ` of ${franchiseName}` : ""}
-                </div>
-                <div className="text-sm sm:text-xs italic text-muted-foreground">Fleet Maintenance</div>
+            <div className="text-center leading-tight">
+              <div className="text-lg sm:text-xl font-extrabold tracking-tight text-foreground">
+                {headerFranchise}
               </div>
+              <div className="text-sm italic text-muted-foreground">Fleet Maintenance</div>
             </div>
           </div>
         </div>
 
-        {/* Brand accent bar */}
+        {/* Orange brand divider */}
         <div className="h-1 w-full bg-orange-500/90" />
-
-        {/* Tiny CSS animation */}
-        <style jsx>{`
-          @keyframes ddzPop {
-            from {
-              opacity: 0;
-              transform: translateY(-6px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-          .animate-ddz-pop {
-            animation: ddzPop 220ms ease-out;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .animate-ddz-pop {
-              animation: none;
-            }
-          }
-        `}</style>
       </header>
 
-
-      <main className="container mx-auto px-4 py-8 max-w-2xl">
-        <div className="text-center mb-8">
-          <p className="text-sm text-muted-foreground mt-3 max-w-md mx-auto leading-relaxed">
+      <main className="container mx-auto px-4 py-5 max-w-2xl">
+        {/* helper text only (no duplicate title) */}
+        <div className="text-center mb-5">
+          <p className="text-sm text-muted-foreground">
             Select your vehicle to access checklists and maintenance tools
           </p>
         </div>
@@ -177,13 +161,15 @@ export default function Home() {
                       <MakeLogo make={vehicle.make} />
 
                       <div className="text-left flex-1 min-w-0">
-                        <CardTitle className="text-lg text-card-foreground">{vehicle.vehicle_number}</CardTitle>
+                        <CardTitle className="text-lg text-card-foreground truncate">
+                          {vehicle.vehicle_number}
+                        </CardTitle>
                         <CardDescription className="text-muted-foreground truncate">
                           {vehicle.make} {vehicle.model}
                         </CardDescription>
                       </div>
 
-                      <div className="text-right shrink-0">
+                      <div className="text-right">
                         <div className="text-xs text-accent font-medium capitalize">{vehicle.status}</div>
                         <div className="text-xs text-muted-foreground">
                           {vehicle.current_mileage?.toLocaleString()} mi
@@ -208,7 +194,7 @@ export default function Home() {
         </div>
 
         {vehicles.length > 0 && (
-          <div className="mt-8 text-center">
+          <div className="mt-7 text-center">
             <Link href="/manager">
               <Button className="bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 text-base font-medium">
                 <Settings className="h-4 w-4 mr-2" />
@@ -219,7 +205,7 @@ export default function Home() {
           </div>
         )}
 
-        <div className="h-8" />
+        <div className="h-6" />
       </main>
     </div>
   )

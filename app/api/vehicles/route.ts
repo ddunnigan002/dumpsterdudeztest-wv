@@ -1,12 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-async function getActiveFranchiseContext() {
-  const supabase = createClient()
+type FranchiseContextOk = {
+  supabase: any
+  user: any
+  franchiseId: string
+}
+
+type FranchiseContextErr = {
+  supabase: any
+  error: string
+  status: 401 | 403
+}
+
+async function getActiveFranchiseContext(): Promise<FranchiseContextOk | FranchiseContextErr> {
+  // ✅ IMPORTANT: await the server client
+  const supabase = await createClient()
 
   const { data: userData, error: userError } = await supabase.auth.getUser()
   if (userError || !userData?.user) {
-    return { supabase, error: "Not authenticated", status: 401 as const }
+    return { supabase, error: "Not authenticated", status: 401 }
   }
 
   const user = userData.user
@@ -16,33 +29,13 @@ async function getActiveFranchiseContext() {
     .select("franchise_id, is_active")
     .eq("user_id", user.id)
     .eq("is_active", true)
-    .single()
+    .maybeSingle()
 
   if (membershipError || !membership?.franchise_id) {
-    return { supabase, error: "No active franchise membership", status: 403 as const }
+    return { supabase, error: "No active franchise membership", status: 403 }
   }
 
   return { supabase, user, franchiseId: membership.franchise_id as string }
-}
-
-async function getFranchiseName(supabase: any, franchiseId: string) {
-  try {
-    const { data, error } = await supabase
-      .from("franchises")
-      .select("name")
-      .eq("id", franchiseId)
-      .maybeSingle()
-
-    if (error) {
-      console.error("[vehicles] franchise name lookup error:", error)
-      return null
-    }
-
-    return data?.name ?? null
-  } catch (e) {
-    console.error("[vehicles] franchise name lookup exception:", e)
-    return null
-  }
 }
 
 export async function GET() {
@@ -50,29 +43,39 @@ export async function GET() {
     const ctx = await getActiveFranchiseContext()
     if ("error" in ctx) {
       return NextResponse.json(
-        { error: ctx.error, franchiseName: null, vehicles: [] },
-        { status: ctx.status },
+        { error: ctx.error, vehicles: [], franchiseName: null },
+        { status: ctx.status }
       )
     }
 
     const { supabase, franchiseId } = ctx
 
-    const [franchiseName, vehiclesRes] = await Promise.all([
-      getFranchiseName(supabase, franchiseId),
-      supabase.from("vehicles").select("*").eq("franchise_id", franchiseId).order("created_at", { ascending: false }),
+    const [vehiclesRes, franchiseRes] = await Promise.all([
+      supabase
+        .from("vehicles")
+        .select("*")
+        .eq("franchise_id", franchiseId)
+        .order("created_at", { ascending: false }),
+
+      supabase
+        .from("franchises")
+        .select("name")
+        .eq("id", franchiseId)
+        .maybeSingle(),
     ])
 
     if (vehiclesRes.error) throw vehiclesRes.error
+    if (franchiseRes.error) throw franchiseRes.error
 
     return NextResponse.json({
-      franchiseName,
       vehicles: vehiclesRes.data ?? [],
+      franchiseName: franchiseRes.data?.name ?? null,
     })
   } catch (error) {
     console.error("[vehicles GET] Error:", error)
     return NextResponse.json(
-      { error: "Failed to fetch vehicles", franchiseName: null, vehicles: [] },
-      { status: 500 },
+      { error: "Failed to fetch vehicles", vehicles: [], franchiseName: null },
+      { status: 500 }
     )
   }
 }

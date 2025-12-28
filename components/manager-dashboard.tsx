@@ -4,8 +4,19 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import BrandedHeader from "@/components/BrandedHeader"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Truck, AlertTriangle, CheckCircle2, Clock, Wrench, FileText, Settings, LogOut } from "lucide-react"
+import {
+  ArrowLeft,
+  Truck,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  Wrench,
+  FileText,
+  Settings,
+  LogOut,
+} from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
 import ComplianceHeatmapByTruck from "@/components/compliance/ComplianceHeatmapByTruck"
 import type { ManagerDashboardData, MaintenanceItem } from "@/lib/manager-dashboard-data"
@@ -30,6 +41,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
   const [franchiseName, setFranchiseName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // keep this if you still plan to use it later; otherwise you can remove it
   const [selectedVehicleId, setSelectedVehicleId] = useState("all")
 
   useEffect(() => {
@@ -59,7 +71,6 @@ export default function ManagerDashboard({ userProfile }: Props) {
       const liveData: DashboardResponse = await response.json()
       setFranchiseName(liveData.franchiseName ?? null)
 
-      // Strip franchiseName before storing in data (optional, but keeps types clean)
       const { franchiseName: _ignored, ...dashboard } = liveData
       setData(dashboard)
     } catch (error) {
@@ -105,43 +116,19 @@ export default function ManagerDashboard({ userProfile }: Props) {
 
   return (
     <div className="min-h-screen bg-background overflow-x-hidden">
+      <BrandedHeader
+        franchiseName={franchiseName}
+        subtitle="Manager Dashboard"
+        showBackToHome
+        onBackToHome={() => router.push("/")}
+        showSettings
+        onSettings={() => router.push("/manager/settings")}
+        showLogout
+        onLogout={handleLogout}
+      />
+
       <div className="max-w-7xl mx-auto p-3 sm:p-4 md:p-6 space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push("/")}
-              className="flex items-center gap-2 self-start"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              <span className="hidden sm:inline">Home</span>
-            </Button>
-
-            <div>
-              <h1 className="text-xl sm:text-2xl font-extrabold text-foreground">{topTitle}</h1>
-              <p className="text-xs sm:text-sm text-muted-foreground italic">Manager Dashboard</p>
-              <p className="text-xs sm:text-sm text-muted-foreground">Welcome, {userProfile.full_name}</p>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/manager/settings")}
-              className="w-full sm:w-auto justify-center"
-            >
-              <Settings className="h-4 w-4 mr-2" />
-              Settings
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handleLogout} className="w-full sm:w-auto justify-center">
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
-        </div>
-
+        {/* Trucks grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {data.trucks.map((truck) => (
             <Card
@@ -172,6 +159,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
                         : "Out of Service"}
                   </Badge>
                 </div>
+
                 <div className="space-y-2 text-xs sm:text-sm">
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Last EOD:</span>
@@ -195,6 +183,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
           ))}
         </div>
 
+        {/* Action Needed */}
         {data.actionItems.length > 0 && (
           <Card>
             <CardHeader className="p-4 sm:p-6">
@@ -238,7 +227,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
           </Card>
         )}
 
-        {/* Compliance Widget */}
+        {/* Compliance */}
         <Card>
           <CardHeader className="p-4 sm:p-6">
             <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
@@ -248,7 +237,6 @@ export default function ManagerDashboard({ userProfile }: Props) {
           </CardHeader>
 
           <CardContent className="p-4 sm:p-6 pt-0">
-            {/* IMPORTANT: no forced min-width, no horizontal scroll */}
             <div className="-mx-4 sm:mx-0 px-4 sm:px-0 overflow-x-hidden">
               <ComplianceHeatmapByTruck franchiseId={userProfile.franchise_id} />
             </div>
@@ -327,14 +315,17 @@ export default function ManagerDashboard({ userProfile }: Props) {
                 <Truck className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Manage Vehicles</span>
               </Button>
+
               <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/reports/pre-trip")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Pre-Trip Reports</span>
               </Button>
+
               <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/reports/gas-analytics")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Gas Analytics</span>
               </Button>
+
               <Button variant="outline" className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm" onClick={() => router.push("/manager/data-override")}>
                 <FileText className="h-4 w-4 sm:h-5 sm:w-5" />
                 <span className="text-xs leading-tight text-center">Data Override</span>
@@ -345,7 +336,6 @@ export default function ManagerDashboard({ userProfile }: Props) {
       </div>
     </div>
   )
-}
 
 function LegendDot({ label, className }: { label: string; className: string }) {
   return (
