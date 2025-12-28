@@ -336,6 +336,7 @@ export default function ManagerDashboard({ userProfile }: Props) {
       </div>
     </div>
   )
+}
 
 function LegendDot({ label, className }: { label: string; className: string }) {
   return (
