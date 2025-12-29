@@ -20,7 +20,6 @@ import {
   Wrench,
   ArrowLeft,
   AlertCircle,
-  Settings,
   Calendar,
   CalendarDays,
 } from "lucide-react"
@@ -39,7 +38,6 @@ interface VehicleDriverDashboardProps {
 
 export default function VehicleDriverDashboard({ vehicleId, userProfile }: VehicleDriverDashboardProps) {
   const router = useRouter()
-  const [maintenanceAlerts, setMaintenanceAlerts] = useState<any[]>([])
   const [weeklyDueDate, setWeeklyDueDate] = useState<string>("")
   const [monthlyDueDate, setMonthlyDueDate] = useState<string>("")
   const [showEndDayReminder, setShowEndDayReminder] = useState(false)
@@ -48,7 +46,6 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
   const [endDayCompleted, setEndDayCompleted] = useState(false)
 
   useEffect(() => {
-    fetchMaintenanceAlerts()
     fetchChecklistDueDates()
     checkEndDayStatus()
     checkDailyTaskCompletion()
@@ -99,37 +96,6 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
     }
   }
 
-  const fetchMaintenanceAlerts = async () => {
-    try {
-      const response = await fetch(`/api/vehicles/${vehicleId}/upcoming-maintenance`)
-      if (response.ok) {
-        const data = await response.json()
-        setMaintenanceAlerts(data.upcomingMaintenance || [])
-      }
-    } catch (error) {
-      console.error("Error fetching maintenance alerts:", error)
-      const mockAlerts = [
-        {
-          id: "1",
-          type: "overdue",
-          message: "Oil change overdue by 500 miles",
-          dueDate: "2024-01-15",
-          maintenanceType: "Oil Change",
-          scheduledId: "oil-change-1",
-        },
-        {
-          id: "2",
-          type: "coming_soon",
-          message: "PTO service needed",
-          dueDate: "2024-02-01",
-          maintenanceType: "PTO Service",
-          scheduledId: "pto-service-1",
-        },
-      ]
-      setMaintenanceAlerts(mockAlerts)
-    }
-  }
-
   const fetchChecklistDueDates = async () => {
     try {
       const [weeklyRes, monthlyRes] = await Promise.all([
@@ -175,10 +141,6 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
       dueDate = new Date(currentYear, currentMonth + 1, dayOfMonth)
     }
     return dueDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-  }
-
-  const handleCompleteMaintenanceClick = () => {
-    router.push(`/vehicle/${vehicleId}/enter-maintenance`)
   }
 
   const getVehicleDisplayName = (id: string) => {
@@ -247,40 +209,6 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
           <div></div>
         </div>
 
-        {/* Maintenance Alerts */}
-        {maintenanceAlerts.length > 0 && (
-          <div className="space-y-2">
-            <h3 className="text-sm font-medium text-foreground mb-2">Maintenance Alerts</h3>
-            {maintenanceAlerts.map((alert, index) => (
-              <Alert
-                key={alert.id || index}
-                className={
-                  alert.type === "overdue" ? "border-destructive bg-destructive/10" : "border-accent bg-accent/10"
-                }
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-2">
-                    <AlertCircle
-                      className={`h-4 w-4 mt-0.5 ${alert.type === "overdue" ? "text-destructive" : "text-accent"}`}
-                    />
-                    <AlertDescription className={alert.type === "overdue" ? "text-destructive" : "text-accent"}>
-                      {alert.message}
-                    </AlertDescription>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleCompleteMaintenanceClick}
-                    className={`ml-2 ${alert.type === "overdue" ? "text-destructive hover:text-destructive/80 hover:bg-destructive/10" : "text-accent hover:text-accent/80 hover:bg-accent/10"}`}
-                  >
-                    Complete
-                  </Button>
-                </div>
-              </Alert>
-            ))}
-          </div>
-        )}
-
         {/* Section 1: Daily Tasks */}
         <Card className="border-primary/20">
           <CardHeader className="pb-3">
@@ -329,12 +257,12 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
           </CardContent>
         </Card>
 
-        {/* Section 2: Maintenance */}
+        {/* Section 2: Weekly / Monthly */}
         <Card className="border-secondary/20">
           <CardHeader className="pb-3">
             <CardTitle className="text-center text-secondary flex items-center justify-center gap-2">
               <Wrench className="h-5 w-5" />
-              Maintenance
+              Weekly / Monthly
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -361,26 +289,6 @@ export default function VehicleDriverDashboard({ vehicleId, userProfile }: Vehic
                   <span>Monthly Checklist</span>
                 </div>
                 {monthlyDueDate && <span className="text-xs opacity-80">Due {monthlyDueDate}</span>}
-              </Button>
-            </Link>
-
-            <Link href={`/vehicle/${vehicleId}/enter-maintenance`} className="block">
-              <Button
-                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground"
-                size="lg"
-              >
-                <Settings className="mr-3 h-5 w-5" />
-                Enter Maintenance
-              </Button>
-            </Link>
-
-            <Link href={`/vehicle/${vehicleId}/schedule-maintenance`} className="block">
-              <Button
-                className="w-full h-14 text-base font-medium bg-secondary hover:bg-secondary/90 text-secondary-foreground"
-                size="lg"
-              >
-                <Wrench className="mr-3 h-5 w-5" />
-                Schedule Maintenance
               </Button>
             </Link>
           </CardContent>

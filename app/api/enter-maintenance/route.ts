@@ -6,19 +6,33 @@ import {
   validateVehicleInFranchise,
 } from "@/lib/api/franchise-context"
 
+function cleanIssueId(id: string) {
+  return id.startsWith("issue-") ? id.replace("issue-", "") : id
+}
+
 export async function POST(request: NextRequest) {
   try {
     const ctx = await getActiveFranchiseContext()
-    if (isContextError(ctx)) {
-      return contextErrorResponse(ctx)
-    }
+    if (isContextError(ctx)) return contextErrorResponse(ctx)
 
     const { supabase, franchiseId } = ctx
     const body = await request.json()
 
-    console.log("Received maintenance data:", body)
+    const {
+      vehicleNumber, // in your current client this is vehicleId.toUpperCase() (works because validateVehicleInFranchise is what you used)
+      maintenanceType,
+      date,
+      serviceProvider,
+      cost,
+      notes,
+      mileage,
+      scheduledMaintenanceId,
+      issueId, // ✅ NEW: optional
+    } = body ?? {}
 
-    const { vehicleNumber, maintenanceType, date, serviceProvider, cost, notes, mileage, scheduledMaintenanceId } = body
+    if (!vehicleNumber || !maintenanceType || !date || !serviceProvider) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
 
     const serviceTypeMapping: Record<string, string> = {
       "Oil Change": "preventive",
@@ -31,130 +45,109 @@ export async function POST(request: NextRequest) {
       "Fuel Filter Replacement": "preventive",
       "Battery Replacement": "repair",
       Inspection: "inspection",
-      "PTO Service": "repair",
       Other: "other",
     }
 
-    const mappedServiceType = serviceTypeMapping[maintenanceType] || "other"
-
-    console.log(`Mapping "${maintenanceType}" to "${mappedServiceType}"`)
+    const mappedServiceType = serviceTypeMapping[maintenanceType] || "repair"
 
     const vehicle = await validateVehicleInFranchise(supabase, franchiseId, vehicleNumber)
     if (!vehicle) {
       return NextResponse.json({ error: "Vehicle not found in your franchise" }, { status: 404 })
     }
 
-    console.log("Vehicle found:", vehicle)
+    // If this is tied to an issue, we can attach extra context to the notes/description
+    const resolvedIssueId = issueId ? cleanIssueId(String(issueId)) : null
 
-    if (!maintenanceType || !date || !serviceProvider) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    const { data: existingRecord, error: checkError } = await supabase
+    // 1) Insert maintenance record
+    const { data: inserted, error: insertErr } = await supabase
       .from("maintenance_records")
-      .select("id, cost, vendor_name")
-      .eq("vehicle_id", vehicle.id)
-      .eq("service_type", mappedServiceType)
-      .eq("service_date", date)
+      .insert({
+        vehicle_id: vehicle.id,
+        service_type: mappedServiceType,
+        service_date: date,
+        vendor_name: serviceProvider,
+        cost: Number(cost) || 0,
+        notes: notes ?? null,
+        mileage_at_service: Number(mileage) || 0,
+        description: resolvedIssueId
+          ? `Repair (linked to issue ${resolvedIssueId})`
+          : `${maintenanceType} performed by ${serviceProvider}`,
+      })
+      .select()
       .maybeSingle()
 
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error("Error checking existing maintenance record:", checkError)
+    if (insertErr) {
+      return NextResponse.json({ error: `Database error: ${insertErr.message}` }, { status: 500 })
     }
 
-    let data
-    let error
-
-    if (existingRecord && (existingRecord.cost === 0 || existingRecord.vendor_name === "Pending cost entry")) {
-      // Update existing placeholder record with cost and service details
-      const updateResult = await supabase
-        .from("maintenance_records")
-        .update({
-          vendor_name: serviceProvider,
-          cost: cost,
-          notes: notes,
-          mileage_at_service: mileage,
-        })
-        .eq("id", existingRecord.id)
-        .select()
-
-      data = updateResult.data
-      error = updateResult.error
-    } else {
-      console.log("Attempting to insert maintenance record with service_type:", mappedServiceType)
-
-      const insertResult = await supabase
-        .from("maintenance_records")
-        .insert({
-          vehicle_id: vehicle.id,
-          service_type: mappedServiceType,
-          service_date: date,
-          vendor_name: serviceProvider,
-          cost: cost,
-          notes: notes,
-          mileage_at_service: mileage,
-          description: `${maintenanceType} performed by ${serviceProvider}`,
-        })
-        .select()
-
-      data = insertResult.data
-      error = insertResult.error
-    }
-
-    if (error) {
-      console.error("Database error details:", {
-        error: error.message,
-        code: error.code,
-        details: error.details,
-        hint: error.hint,
-        serviceType: mappedServiceType,
-        maintenanceType: maintenanceType,
-      })
-      return NextResponse.json({ error: `Database error: ${error.message}` }, { status: 500 })
-    }
-
+    // 2) Complete scheduled maintenance item (optional)
     if (scheduledMaintenanceId) {
-      // Check if scheduledMaintenanceId is a valid UUID
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-      if (uuidRegex.test(scheduledMaintenanceId)) {
-        const { error: scheduleError } = await supabase
+      if (uuidRegex.test(String(scheduledMaintenanceId))) {
+        const { error: scheduleErr } = await supabase
           .from("scheduled_maintenance")
           .update({ completed: true })
           .eq("id", scheduledMaintenanceId)
+          .eq("franchise_id", franchiseId)
 
-        if (scheduleError) {
-          console.error("Error updating scheduled maintenance:", scheduleError)
+        if (scheduleErr) {
           return NextResponse.json(
-            { error: `Error updating scheduled maintenance: ${scheduleError.message}` },
+            { error: `Error updating scheduled maintenance: ${scheduleErr.message}` },
             { status: 500 },
           )
         }
-      } else {
-        console.log(
-          "Skipping scheduled maintenance update - using fallback data with non-UUID ID:",
-          scheduledMaintenanceId,
+      }
+    }
+
+    // 3) Update vehicle mileage safely (only if new mileage is higher)
+    const mileageNum = Number(mileage) || 0
+    if (mileageNum > 0) {
+      // Only update if existing current_mileage is LOWER than new mileage
+      const { error: mileageErr } = await supabase
+        .from("vehicles")
+        .update({ current_mileage: mileageNum })
+        .eq("id", vehicle.id)
+        .eq("franchise_id", franchiseId)
+        .lt("current_mileage", mileageNum)
+
+      if (mileageErr) {
+        // non-fatal
+        console.error("Error updating vehicle mileage:", mileageErr)
+      }
+    }
+
+    // 4) ✅ Resolve linked issue (optional)
+    if (resolvedIssueId) {
+      const { error: issueErr } = await supabase
+        .from("vehicle_issues")
+        .update({
+          status: "resolved",
+          resolved_at: new Date().toISOString(),
+          resolved_by: null, // optional if you don't store
+        })
+        .eq("id", resolvedIssueId)
+        .in("vehicle_id", [vehicle.id]) // ensure issue belongs to this vehicle
+        .select("id")
+        .maybeSingle()
+
+      if (issueErr) {
+        // At this point maintenance is already inserted, but at least this is server-side, not a 2nd client call
+        return NextResponse.json(
+          { error: `Maintenance saved, but failed to resolve issue: ${issueErr.message}` },
+          { status: 500 },
         )
       }
     }
 
-    // Update vehicle's current mileage if this is higher
-    if (mileage > 0) {
-      const { error: mileageError } = await supabase
-        .from("vehicles")
-        .update({ current_mileage: mileage })
-        .eq("id", vehicle.id)
-        .eq("franchise_id", franchiseId) // Scope update to franchise
-        .gte("current_mileage", mileage)
-
-      if (mileageError) {
-        console.error("Error updating vehicle mileage:", mileageError)
-      }
-    }
-
-    return NextResponse.json({ success: true, data })
+    return NextResponse.json({
+      success: true,
+      data: inserted ?? null,
+      issueResolved: Boolean(resolvedIssueId),
+    })
   } catch (error: any) {
     console.error("API error:", error)
-    return NextResponse.json({ error: `Internal server error: ${error.message}` }, { status: 500 })
+    return NextResponse.json({ error: `Internal server error: ${error?.message ?? "Unknown"}` }, { status: 500 })
   }
 }

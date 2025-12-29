@@ -341,6 +341,15 @@ export default function ManagerDashboard({ userProfile }: Props) {
                   Maintenance Dashboard
                 </span>
               </Button>
+
+              <Button
+                variant="outline"
+                className="h-20 flex flex-col gap-2 bg-transparent text-xs sm:text-sm"
+                onClick={() => router.push("/manager/settings/maintenance")}
+              >
+                <Wrench className="h-4 w-4 sm:h-5 sm:w-5" />
+                <span className="text-xs leading-tight text-center">Maintenance Settings</span>
+              </Button>
             </div>
           </CardContent>
         </Card>

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -22,6 +23,8 @@ type IssueRow = {
 }
 
 export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProps) {
+  const router = useRouter()
+
   const [vehicle, setVehicle] = useState<any>(null)
   const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([])
   const [upcomingMaintenance, setUpcomingMaintenance] = useState<any[]>([])
@@ -35,7 +38,6 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
   const [loadingDetails, setLoadingDetails] = useState(false)
 
   const [completingMaintenance, setCompletingMaintenance] = useState<string | null>(null)
-  const [resolvingIssue, setResolvingIssue] = useState<string | null>(null)
 
   const openIssues = useMemo(() => {
     return (issues ?? []).filter((i) => {
@@ -45,7 +47,6 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
   }, [issues])
 
   const derivedStatus = useMemo(() => {
-    // If there are open issues, we want to show the same "Needs Attention" idea as the dashboard.
     if (openIssues.length > 0) return "needs-attention"
     return (vehicle?.status ?? "active").toString().toLowerCase()
   }, [openIssues.length, vehicle?.status])
@@ -63,17 +64,17 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
         setVehicle(null)
       }
 
-    // 2) Issues (supports both shapes: [] OR { issues: [] })
-    const issuesResp = await fetch(`/api/vehicles/${vehicleId}/issues`, { cache: "no-store" })
-    if (issuesResp.ok) {
-      const j = await issuesResp.json()
-      const list = Array.isArray(j) ? j : (j.issues ?? [])
-      setIssues(list)
-    } else {
-      setIssues([])
-    } 
+      // 2) Issues (supports both shapes: [] OR { issues: [] })
+      const issuesResp = await fetch(`/api/vehicles/${vehicleId}/issues`, { cache: "no-store" })
+      if (issuesResp.ok) {
+        const j = await issuesResp.json()
+        const list = Array.isArray(j) ? j : (j.issues ?? [])
+        setIssues(Array.isArray(list) ? list : [])
+      } else {
+        setIssues([])
+      }
 
-      // 3) Maintenance history
+      // 3) Maintenance history (supports multiple shapes)
       const historyResponse = await fetch(`/api/vehicles/${vehicleId}/maintenance-history`, { cache: "no-store" })
       if (historyResponse.ok) {
         const j = await historyResponse.json()
@@ -87,7 +88,6 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
       } else {
         setMaintenanceHistory([])
       }
-
 
       // 4) Upcoming maintenance
       const upcomingResponse = await fetch(`/api/vehicles/${vehicleId}/upcoming-maintenance`, { cache: "no-store" })
@@ -149,45 +149,13 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
   function formatDateSafe(value: any) {
     if (!value) return "—"
     const d = new Date(value)
-    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString()
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString()
   }
 
-  const resolveIssue = async (issueId: string) => {
-    setResolvingIssue(issueId)
-    try {
-      const response = await fetch("/api/resolve-issue", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          // Your existing UI sometimes uses "issue-<id>" in other places
-          issueId: issueId.replace("issue-", ""),
-          resolvedBy: "Manager",
-          resolvedDate: new Date().toISOString().split("T")[0],
-        }),
-      })
-
-      if (response.ok) {
-        // Update issues list immediately
-        setIssues((prev) =>
-          prev.map((i) =>
-            i.id === issueId || `issue-${i.id}` === issueId ? { ...i, status: "resolved" } : i,
-          ),
-        )
-
-        // Also update activity list if it contains that issue
-        setRecentActivity((prev) =>
-          prev.map((activity) =>
-            activity.id === issueId ? { ...activity, status: "resolved" } : activity,
-          ),
-        )
-      } else {
-        console.error("Failed to resolve issue")
-      }
-    } catch (error) {
-      console.error("Error resolving issue:", error)
-    } finally {
-      setResolvingIssue(null)
-    }
+  const goResolveIssue = (rawIssueId: string) => {
+    // rawIssueId can be either "<uuid>" OR "issue-<uuid>"
+    const clean = rawIssueId.startsWith("issue-") ? rawIssueId.replace("issue-", "") : rawIssueId
+    router.push(`/vehicle/${vehicleId}/enter-maintenance?issueId=${clean}`)
   }
 
   const handleActivityClick = async (activity: any) => {
@@ -300,7 +268,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
         </CardContent>
       </Card>
 
-      {/* Open Issues (NEW) */}
+      {/* Open Issues */}
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -323,15 +291,10 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => resolveIssue(i.id)}
-                        disabled={resolvingIssue === i.id}
+                        onClick={() => goResolveIssue(i.id)}
                         className="text-green-600 hover:text-green-700 hover:bg-green-50"
                       >
-                        {resolvingIssue === i.id ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        ) : (
-                          "Resolve"
-                        )}
+                        Resolve
                       </Button>
                     </div>
                   </div>
@@ -414,10 +377,13 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                       <Calendar className="h-4 w-4 text-blue-500" />
                     )}
                   </div>
+
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-1">
                       <h4 className="font-medium text-sm">{activity.type}</h4>
-                      <span className="text-xs text-gray-600">{new Date(activity.created_at).toLocaleDateString()}</span>
+                      <span className="text-xs text-gray-600">
+                        {new Date(activity.created_at).toLocaleDateString()}
+                      </span>
                     </div>
                     <p className="text-sm text-gray-600">By {activity.driver_name || "Driver"}</p>
                     {activity.details && <p className="text-sm text-gray-900 mt-1">{activity.details}</p>}
@@ -431,16 +397,11 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                         variant="outline"
                         onClick={(e) => {
                           e.stopPropagation()
-                          resolveIssue(activity.id)
+                          goResolveIssue(activity.id)
                         }}
-                        disabled={resolvingIssue === activity.id}
                         className="text-green-600 hover:text-green-700 hover:bg-green-50"
                       >
-                        {resolvingIssue === activity.id ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        ) : (
-                          "Resolve"
-                        )}
+                        Resolve
                       </Button>
                     </div>
                   )}
@@ -523,6 +484,7 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                 <X className="h-4 w-4" />
               </Button>
             </div>
+
             <div className="p-4">
               {loadingDetails ? (
                 <p className="text-center text-gray-600">Loading details...</p>
@@ -537,7 +499,21 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                     <p className="font-medium">{selectedActivity.driver_name || "Unknown"}</p>
                   </div>
 
-                  {/* Your existing detail render blocks unchanged */}
+                  {selectedActivity.type === "Issue Report" && (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-sm text-gray-600">Issue Description</p>
+                        <p className="font-medium">{activityDetails.description || "No description provided"}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">Status</p>
+                        <Badge variant={activityDetails.status === "resolved" ? "secondary" : "destructive"}>
+                          {activityDetails.status?.toUpperCase() || "OPEN"}
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+
                   {selectedActivity.type === "Daily Checklist" && (
                     <div>
                       <p className="text-sm text-gray-600 mb-2">Checklist Items</p>
@@ -547,17 +523,25 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                             <span className="text-sm">{item.item_name}</span>
                             <Badge
                               variant={
-                                item.status === "pass" ? "secondary" : item.status === "service_soon" ? "outline" : "destructive"
+                                item.status === "pass"
+                                  ? "secondary"
+                                  : item.status === "service_soon"
+                                  ? "outline"
+                                  : "destructive"
                               }
                               className={
                                 item.status === "pass"
                                   ? "bg-green-100 text-green-800"
                                   : item.status === "service_soon"
-                                    ? "bg-yellow-100 text-yellow-800"
-                                    : "bg-red-100 text-red-800"
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-red-100 text-red-800"
                               }
                             >
-                              {item.status === "pass" ? "Pass" : item.status === "service_soon" ? "Service Soon" : "Fail"}
+                              {item.status === "pass"
+                                ? "Pass"
+                                : item.status === "service_soon"
+                                ? "Service Soon"
+                                : "Fail"}
                             </Badge>
                           </div>
                         ))}
@@ -583,21 +567,6 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
                           <p className="font-medium">{activityDetails.notes}</p>
                         </div>
                       )}
-                    </div>
-                  )}
-
-                  {selectedActivity.type === "Issue Report" && (
-                    <div className="space-y-3">
-                      <div>
-                        <p className="text-sm text-gray-600">Issue Description</p>
-                        <p className="font-medium">{activityDetails.description || "No description provided"}</p>
-                      </div>
-                      <div>
-                        <p className="text-sm text-gray-600">Status</p>
-                        <Badge variant={activityDetails.status === "resolved" ? "secondary" : "destructive"}>
-                          {activityDetails.status?.toUpperCase() || "OPEN"}
-                        </Badge>
-                      </div>
                     </div>
                   )}
                 </div>

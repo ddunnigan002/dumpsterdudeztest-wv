@@ -1,172 +1,124 @@
 "use client"
 
-import { useState } from "react"
-
 import type React from "react"
-import { useEffect } from "react"
+import { useEffect, useMemo, useState } from "react"
+import Link from "next/link"
+import { useSearchParams } from "next/navigation"
+import { ArrowLeft, Wrench } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ArrowLeft, Wrench } from "lucide-react"
-import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useSearchParams } from "next/navigation"
 
 interface MaintenanceEntryProps {
   vehicleId: string
 }
 
-interface ScheduledMaintenance {
+type IssueDetails = {
   id: string
-  maintenance_type: string
-  due_date?: string
-  due_mileage?: number
+  description?: string | null
+  created_at?: string
 }
 
 export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
-  const router = useRouter()
   const searchParams = useSearchParams()
+  const issueIdRaw = searchParams.get("issueId")
+  const issueId = useMemo(() => {
+    if (!issueIdRaw) return null
+    return issueIdRaw.startsWith("issue-") ? issueIdRaw.replace("issue-", "") : issueIdRaw
+  }, [issueIdRaw])
+
+  const isResolvingIssue = Boolean(issueId)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
-  const [scheduledItems, setScheduledItems] = useState<ScheduledMaintenance[]>([])
+
+  const [vehicleNumber, setVehicleNumber] = useState<string>("")
+  const [issue, setIssue] = useState<IssueDetails | null>(null)
+  const [issueLoading, setIssueLoading] = useState(false)
 
   const [formData, setFormData] = useState({
-    maintenanceType: "",
-    customType: "",
-    date: new Date().toISOString().split("T")[0], // Default to today
+    date: new Date().toISOString().split("T")[0],
     serviceProvider: "",
     cost: "",
     notes: "",
     mileage: "",
-    scheduledMaintenanceId: "", // Track which scheduled item this completes
   })
 
+  // 1) Load vehicle display name (vehicle_number)
   useEffect(() => {
-    const fetchScheduledMaintenance = async () => {
+    ;(async () => {
       try {
-        const response = await fetch(`/api/vehicles/${vehicleId}/scheduled-maintenance`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data && data.length > 0) {
-            setScheduledItems(data)
-          } else {
-            setScheduledItems([])
-          }
-        } else {
-          setScheduledItems([])
-        }
-      } catch (error) {
-        console.error("Error fetching scheduled maintenance:", error)
-        setScheduledItems([])
+        const res = await fetch(`/api/vehicles/${vehicleId}`, { cache: "no-store" })
+        if (!res.ok) return
+        const j = await res.json()
+        const v = j?.vehicle ?? j
+        setVehicleNumber(v?.vehicle_number ?? "")
+      } catch {
+        // ignore
       }
-    }
-
-    fetchScheduledMaintenance()
+    })()
   }, [vehicleId])
 
-  const maintenanceTypes = [
-    "Oil Change",
-    "Brake Service",
-    "Tire Rotation",
-    "Engine Tune-up",
-    "Transmission Service",
-    "Coolant Flush",
-    "Air Filter Replacement",
-    "Fuel Filter Replacement",
-    "Battery Replacement",
-    "Inspection",
-    "Other",
-  ]
+  // 2) If resolving issue, load issue details for the banner
+  useEffect(() => {
+    if (!issueId) return
+    setIssueLoading(true)
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/activity-details/issue/${issueId}`, { cache: "no-store" })
+        if (!res.ok) {
+          setIssue(null)
+          return
+        }
+        const j = await res.json()
+        setIssue(j ?? null)
+      } catch {
+        setIssue(null)
+      } finally {
+        setIssueLoading(false)
+      }
+    })()
+  }, [issueId])
 
-  const allMaintenanceOptions = [
-    ...maintenanceTypes,
-    ...scheduledItems.map((item) => item.maintenance_type).filter((type) => !maintenanceTypes.includes(type)),
-  ]
+  const headerTitle = isResolvingIssue ? "Resolve Issue" : "Enter Maintenance"
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
 
     try {
-      const response = await fetch("/api/enter-maintenance", {
+      const payload = {
+        vehicleNumber: vehicleId.toUpperCase(), // keep your existing server expectation
+        maintenanceType: isResolvingIssue ? "Repair" : "Other", // if you still want generic entry later
+        date: formData.date,
+        serviceProvider: formData.serviceProvider,
+        cost: Number.parseFloat(formData.cost) || 0,
+        notes: formData.notes,
+        mileage: Number.parseInt(formData.mileage) || 0,
+        issueId: issueId ?? null, // ✅ single-call approach
+      }
+
+      const res = await fetch("/api/enter-maintenance", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          vehicleNumber: vehicleId.toUpperCase(),
-          maintenanceType: formData.maintenanceType === "Other" ? formData.customType : formData.maintenanceType,
-          date: formData.date,
-          serviceProvider: formData.serviceProvider,
-          cost: Number.parseFloat(formData.cost) || 0,
-          notes: formData.notes,
-          mileage: Number.parseInt(formData.mileage) || 0,
-          scheduledMaintenanceId: formData.scheduledMaintenanceId, // Include scheduled ID to mark as complete
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       })
 
-      if (response.ok) {
-        setIsSuccess(true)
-      } else {
-        throw new Error("Failed to save maintenance record")
+      const j = await res.json().catch(() => null)
+      if (!res.ok) {
+        throw new Error(j?.error ?? "Failed to save maintenance record")
       }
-    } catch (error) {
-      console.error("Error saving maintenance:", error)
-      alert("Failed to save maintenance record. Please try again.")
+
+      setIsSuccess(true)
+    } catch (err: any) {
+      console.error(err)
+      alert(err?.message ?? "Failed to save. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
-  }
-
-  const getVehicleDisplayName = (id: string) => {
-    switch (id.toLowerCase()) {
-      case "chevy":
-        return "Chevy Truck"
-      case "kenworth":
-        return "Kenworth Truck"
-      default:
-        return id
-    }
-  }
-
-  const handleOutstandingTaskSelect = (taskId: string) => {
-    console.log("Selected taskId:", taskId)
-    console.log("Available scheduledItems:", scheduledItems)
-
-    const selectedTask = scheduledItems.find((item) => item.id === taskId)
-    console.log("Found selectedTask:", selectedTask)
-
-    if (selectedTask) {
-      setFormData((prev) => ({
-        ...prev,
-        maintenanceType: selectedTask.maintenance_type,
-        scheduledMaintenanceId: taskId,
-      }))
-      console.log("Updated formData with:", selectedTask.maintenance_type)
-    } else {
-      console.log("No task found for ID:", taskId)
-    }
-  }
-
-  const clearOutstandingTask = () => {
-    setFormData({
-      ...formData,
-      maintenanceType: "",
-      scheduledMaintenanceId: "",
-    })
-  }
-
-  const formatMaintenanceTaskDisplay = (item: ScheduledMaintenance) => {
-    let display = item.maintenance_type
-    if (item.due_date) {
-      display += ` (Due: ${new Date(item.due_date).toLocaleDateString()})`
-    }
-    if (item.due_mileage) {
-      display += ` (Due: ${item.due_mileage.toLocaleString()} mi)`
-    }
-    return display
   }
 
   if (isSuccess) {
@@ -175,7 +127,7 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
         <div className="max-w-md mx-auto space-y-6">
           <div className="text-center">
             <h1 className="text-lg font-bold text-orange-600">Dumpster Dudez</h1>
-            <h2 className="text-sm text-gray-600">{getVehicleDisplayName(vehicleId)}</h2>
+            <h2 className="text-sm text-gray-600">{vehicleNumber || "Truck"}</h2>
           </div>
 
           <Card>
@@ -183,10 +135,17 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
                 <Wrench className="h-8 w-8 text-green-600" />
               </div>
-              <h3 className="text-xl font-semibold text-green-800">Maintenance Recorded!</h3>
-              <p className="text-gray-600">Your maintenance record has been saved successfully.</p>
+              <h3 className="text-xl font-semibold text-green-800">
+                {isResolvingIssue ? "Issue Resolved!" : "Maintenance Recorded!"}
+              </h3>
+              <p className="text-gray-600">
+                {isResolvingIssue
+                  ? "Maintenance was recorded and the issue was marked resolved."
+                  : "Your maintenance record has been saved successfully."}
+              </p>
+
               <Link href={`/vehicle/${vehicleId}`}>
-                <Button className="w-full bg-orange-600 hover:bg-orange-700">Back to Dashboard</Button>
+                <Button className="w-full bg-orange-600 hover:bg-orange-700">Back to Truck</Button>
               </Link>
             </CardContent>
           </Card>
@@ -206,90 +165,55 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
               Back
             </Button>
           </Link>
+
           <div className="text-center">
             <h1 className="text-lg font-bold text-orange-600">Dumpster Dudez</h1>
-            <h2 className="text-sm text-gray-600">{getVehicleDisplayName(vehicleId)}</h2>
+            <h2 className="text-sm text-gray-600">{vehicleNumber || vehicleId}</h2>
           </div>
-          <div></div>
+
+          <div />
         </div>
 
         <Card>
           <CardHeader>
             <CardTitle className="text-center flex items-center justify-center gap-2">
               <Wrench className="h-5 w-5" />
-              Enter Maintenance
+              {headerTitle}
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {scheduledItems.length > 0 && (
-              <div className="mb-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <Label className="text-sm font-semibold text-orange-800 mb-2 block">
-                  Outstanding Maintenance Tasks
-                </Label>
-                <select
-                  value={formData.scheduledMaintenanceId}
-                  onChange={(e) => handleOutstandingTaskSelect(e.target.value)}
-                  className="w-full p-2 border border-gray-300 rounded-md bg-white"
-                >
-                  <option value="">Select an outstanding task to complete</option>
-                  {scheduledItems.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {formatMaintenanceTaskDisplay(item)}
-                    </option>
-                  ))}
-                </select>
-                {formData.scheduledMaintenanceId && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={clearOutstandingTask}
-                    className="mt-2 text-xs bg-transparent"
-                  >
-                    Clear Selection
-                  </Button>
-                )}
+
+          <CardContent className="space-y-4">
+            {/* Linked issue banner */}
+            {isResolvingIssue && (
+              <div className="p-3 rounded-md border bg-orange-50">
+                <div className="text-sm font-semibold text-orange-800">Linked Issue</div>
+                <div className="text-sm text-orange-900 mt-1">
+                  {issueLoading
+                    ? "Loading issue details…"
+                    : issue?.description
+                      ? issue.description
+                      : "Issue details not available"}
+                </div>
               </div>
             )}
 
+            {/* Maintenance Type (locked when resolving issue) */}
+            <div className="space-y-1">
+              <Label>Maintenance Type</Label>
+              <Input
+                value={isResolvingIssue ? "Repair (linked to issue)" : "General maintenance"}
+                readOnly
+              />
+            </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="maintenanceType">Maintenance Type</Label>
-                <select
-                  value={formData.maintenanceType}
-                  onChange={(e) => setFormData({ ...formData, maintenanceType: e.target.value })}
-                  className="w-full p-2 border border-gray-300 rounded-md bg-white"
-                  required
-                >
-                  <option value="">Select maintenance type</option>
-                  {maintenanceTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {formData.maintenanceType === "Other" && (
-                <div>
-                  <Label htmlFor="customType">Custom Maintenance Type</Label>
-                  <Input
-                    id="customType"
-                    value={formData.customType}
-                    onChange={(e) => setFormData({ ...formData, customType: e.target.value })}
-                    placeholder="Enter custom maintenance type"
-                    required
-                  />
-                </div>
-              )}
-
               <div>
                 <Label htmlFor="date">Date</Label>
                 <Input
                   id="date"
                   type="date"
                   value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  onChange={(e) => setFormData((p) => ({ ...p, date: e.target.value }))}
                   required
                 />
               </div>
@@ -300,7 +224,7 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
                   id="mileage"
                   type="number"
                   value={formData.mileage}
-                  onChange={(e) => setFormData({ ...formData, mileage: e.target.value })}
+                  onChange={(e) => setFormData((p) => ({ ...p, mileage: e.target.value }))}
                   placeholder="Enter current mileage"
                   required
                 />
@@ -311,7 +235,7 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
                 <Input
                   id="serviceProvider"
                   value={formData.serviceProvider}
-                  onChange={(e) => setFormData({ ...formData, serviceProvider: e.target.value })}
+                  onChange={(e) => setFormData((p) => ({ ...p, serviceProvider: e.target.value }))}
                   placeholder="Shop name or your name if DIY"
                   required
                 />
@@ -324,7 +248,7 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
                   type="number"
                   step="0.01"
                   value={formData.cost}
-                  onChange={(e) => setFormData({ ...formData, cost: e.target.value })}
+                  onChange={(e) => setFormData((p) => ({ ...p, cost: e.target.value }))}
                   placeholder="0.00"
                   required
                 />
@@ -335,14 +259,19 @@ export default function MaintenanceEntry({ vehicleId }: MaintenanceEntryProps) {
                 <Textarea
                   id="notes"
                   value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  onChange={(e) => setFormData((p) => ({ ...p, notes: e.target.value }))}
                   placeholder="Additional details about the maintenance..."
                   rows={3}
                 />
               </div>
 
-              <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700" size="lg" disabled={isSubmitting}>
-                {isSubmitting ? "Saving..." : "Save Maintenance Record"}
+              <Button
+                type="submit"
+                className="w-full bg-teal-600 hover:bg-teal-700"
+                size="lg"
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Saving..." : isResolvingIssue ? "Save & Resolve Issue" : "Save Maintenance Record"}
               </Button>
             </form>
           </CardContent>

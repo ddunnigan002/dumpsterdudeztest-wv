@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,50 +16,103 @@ interface ScheduleMaintenanceProps {
   vehicleId: string
 }
 
+type PolicyRow = {
+  maintenance_type: string
+  is_active: boolean
+}
+
 export default function ScheduleMaintenance({ vehicleId }: ScheduleMaintenanceProps) {
   const [formData, setFormData] = useState({
     maintenanceType: "",
     description: "",
-    triggerType: "mileage", // "mileage" or "date"
+    triggerType: "mileage" as "mileage" | "date",
     targetMileage: "",
     targetDate: "",
   })
+
+  const [maintenanceTypes, setMaintenanceTypes] = useState<string[]>([])
+  const [loadingTypes, setLoadingTypes] = useState(false)
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [errorMsg, setErrorMsg] = useState<string>("")
+
+  useEffect(() => {
+    ;(async () => {
+      setLoadingTypes(true)
+      try {
+        const res = await fetch("/api/manager/maintenance-policy", { cache: "no-store" })
+        if (!res.ok) return
+        const j = (await res.json()) as PolicyRow[] | any
+
+        const types = (Array.isArray(j) ? j : [])
+          .filter((r: any) => r?.is_active !== false)
+          .map((r: any) => String(r?.maintenance_type ?? "").trim())
+          .filter(Boolean)
+          .sort((a: string, b: string) => a.localeCompare(b))
+
+        setMaintenanceTypes(types)
+      } finally {
+        setLoadingTypes(false)
+      }
+    })()
+  }, [])
+
+  const canSubmit = useMemo(() => {
+    if (!formData.maintenanceType) return false
+    if (formData.triggerType === "mileage") return formData.targetMileage.trim().length > 0
+    return formData.targetDate.trim().length > 0
+  }, [formData])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setErrorMsg("")
     setIsSubmitting(true)
 
     try {
-      const response = await fetch("/api/schedule-maintenance", {
+      const payload: any = {
+        maintenance_type: formData.maintenanceType,
+        description: formData.description || null,
+      }
+
+      if (formData.triggerType === "mileage") {
+        const miles = Number.parseInt(formData.targetMileage, 10)
+        if (!Number.isFinite(miles)) {
+          setErrorMsg("Please enter a valid mileage.")
+          return
+        }
+        payload.due_mileage = miles
+      } else {
+        if (!formData.targetDate) {
+          setErrorMsg("Please select a target date.")
+          return
+        }
+        payload.due_date = formData.targetDate // YYYY-MM-DD
+      }
+
+      const response = await fetch(`/api/vehicles/${vehicleId}/scheduled-maintenance`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          vehicleId,
-          maintenanceType: formData.maintenanceType,
-          description: formData.description,
-          triggerType: formData.triggerType,
-          targetMileage: formData.triggerType === "mileage" ? Number.parseInt(formData.targetMileage) : null,
-          targetDate: formData.triggerType === "date" ? formData.targetDate : null,
-          createdDate: new Date().toISOString(),
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
       })
 
-      if (response.ok) {
-        setIsSubmitted(true)
-        setFormData({
-          maintenanceType: "",
-          description: "",
-          triggerType: "mileage",
-          targetMileage: "",
-          targetDate: "",
-        })
+      if (!response.ok) {
+        const j = await response.json().catch(() => null)
+        setErrorMsg(j?.error ?? "Failed to schedule maintenance.")
+        return
       }
+
+      setIsSubmitted(true)
+      setFormData({
+        maintenanceType: "",
+        description: "",
+        triggerType: "mileage",
+        targetMileage: "",
+        targetDate: "",
+      })
     } catch (error) {
       console.error("Error scheduling maintenance:", error)
+      setErrorMsg("Unexpected error scheduling maintenance.")
     } finally {
       setIsSubmitting(false)
     }
@@ -118,6 +171,7 @@ export default function ScheduleMaintenance({ vehicleId }: ScheduleMaintenancePr
               {getVehicleDisplayName(vehicleId)} - Schedule Maintenance
             </CardTitle>
           </CardHeader>
+
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
@@ -128,19 +182,27 @@ export default function ScheduleMaintenance({ vehicleId }: ScheduleMaintenancePr
                   required
                 >
                   <SelectTrigger className="h-12">
-                    <SelectValue placeholder="Select maintenance type" />
+                    <SelectValue
+                      placeholder={loadingTypes ? "Loading types..." : "Select maintenance type"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="oil_change">Oil Change</SelectItem>
-                    <SelectItem value="brake_inspection">Brake Inspection</SelectItem>
-                    <SelectItem value="tire_rotation">Tire Rotation</SelectItem>
-                    <SelectItem value="hydraulic_service">Hydraulic Service</SelectItem>
-                    <SelectItem value="annual_inspection">Annual Inspection</SelectItem>
-                    <SelectItem value="transmission_service">Transmission Service</SelectItem>
-                    <SelectItem value="coolant_flush">Coolant Flush</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
+                    {maintenanceTypes.length === 0 ? (
+                      <SelectItem value="__none" disabled>
+                        {loadingTypes ? "Loading..." : "No types found (set them in Maintenance Settings)"}
+                      </SelectItem>
+                    ) : (
+                      maintenanceTypes.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                <div className="text-xs text-muted-foreground">
+                  Types are managed in <span className="font-medium">Maintenance Settings</span>.
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -206,13 +268,26 @@ export default function ScheduleMaintenance({ vehicleId }: ScheduleMaintenancePr
                 </div>
               )}
 
+              {errorMsg ? (
+                <div className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+                  {errorMsg}
+                </div>
+              ) : null}
+
               <Button
                 type="submit"
                 className="w-full h-12 text-lg bg-orange-600 hover:bg-orange-700"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !canSubmit}
               >
                 {isSubmitting ? "Scheduling..." : "Schedule Maintenance"}
               </Button>
+
+              {maintenanceTypes.length === 0 ? (
+                <div className="text-xs text-muted-foreground text-center">
+                  Add maintenance types (and intervals) in{" "}
+                  <span className="font-medium">Manager → Maintenance Settings</span>.
+                </div>
+              ) : null}
             </form>
           </CardContent>
         </Card>
