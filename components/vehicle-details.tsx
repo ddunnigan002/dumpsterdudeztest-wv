@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, Truck, Calendar, Wrench, AlertTriangle, CheckCircle, X } from "lucide-react"
+import MaintenanceCategoryBadge from "@/components/maintenance/MaintenanceCategoryBadge"
 
 interface VehicleDetailsProps {
   vehicleId: string
@@ -75,11 +76,18 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
       // 3) Maintenance history
       const historyResponse = await fetch(`/api/vehicles/${vehicleId}/maintenance-history`, { cache: "no-store" })
       if (historyResponse.ok) {
-        const historyData = await historyResponse.json()
-        setMaintenanceHistory(historyData ?? [])
+        const j = await historyResponse.json()
+        const list =
+          Array.isArray(j) ? j :
+          Array.isArray(j.maintenanceHistory) ? j.maintenanceHistory :
+          Array.isArray(j.history) ? j.history :
+          Array.isArray(j.records) ? j.records :
+          []
+        setMaintenanceHistory(list)
       } else {
         setMaintenanceHistory([])
       }
+
 
       // 4) Upcoming maintenance
       const upcomingResponse = await fetch(`/api/vehicles/${vehicleId}/upcoming-maintenance`, { cache: "no-store" })
@@ -136,6 +144,12 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
     } finally {
       setCompletingMaintenance(null)
     }
+  }
+
+  function formatDateSafe(value: any) {
+    if (!value) return "—"
+    const d = new Date(value)
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString()
   }
 
   const resolveIssue = async (issueId: string) => {
@@ -460,17 +474,28 @@ export default function VehicleDetails({ vehicleId, onBack }: VehicleDetailsProp
             <div className="space-y-3">
               {maintenanceHistory.map((record) => (
                 <div key={record.id} className="p-3 border rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium">{record.maintenance_type}</h4>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">${record.cost?.toFixed(2) || "0.00"}</p>
-                      <p className="text-xs text-gray-600">{new Date(record.date_performed).toLocaleDateString()}</p>
+                  <div className="flex items-start justify-between gap-3 mb-2">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <MaintenanceCategoryBadge category={record.maintenance_category} />
+                        <Badge variant="secondary">{record.service_type}</Badge>
+                      </div>
+                      <h4 className="font-medium">{record.description || "Maintenance"}</h4>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <p className="text-sm font-medium">${Number(record.cost ?? 0).toFixed(2)}</p>
+                      <p className="text-xs text-gray-600">
+                        {formatDateSafe(record.service_date ?? record.date_performed ?? record.created_at)}
+                      </p>
                     </div>
                   </div>
+
                   {record.notes && <p className="text-sm text-gray-900 mb-1">{record.notes}</p>}
+
                   <div className="flex items-center justify-between text-xs text-gray-600">
-                    <span>{record.service_provider || "Unknown provider"}</span>
-                    <span>{record.mileage_at_service?.toLocaleString() || "0"} miles</span>
+                    <span>{record.vendor_name ?? record.service_provider ?? "Unknown provider"}</span>
+                    <span>{Number(record.mileage_at_service ?? 0).toLocaleString()} miles</span>
                   </div>
                 </div>
               ))}
